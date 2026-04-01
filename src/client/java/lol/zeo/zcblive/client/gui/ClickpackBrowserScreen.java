@@ -12,7 +12,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
@@ -63,7 +62,7 @@ public final class ClickpackBrowserScreen extends Screen {
 		int contentBottom = height - 54;
 		int listWidth = Math.max(220, (width - 36) / 2);
 		clickpackList = addRenderableWidget(new ClickpackList(minecraft, listWidth, contentBottom - contentTop, contentTop, 26));
-		clickpackList.updateSizeAndPosition(listWidth, contentBottom - contentTop, 12, contentTop);
+		clickpackList.updateSizeAndPosition(listWidth, contentBottom - contentTop, contentTop);
 
 		int buttonY = height - 28;
 		refreshButton = addRenderableWidget(Button.builder(Component.literal("Refresh"), ignored -> refreshDatabase()).bounds(12, buttonY, 80, 20).build());
@@ -91,35 +90,6 @@ public final class ClickpackBrowserScreen extends Screen {
 	@Override
 	public void onClose() {
 		minecraft.setScreen(parent);
-	}
-
-	@Override
-	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		if (clickpackList != null && clickpackList.isOverOwnScrollbar(event.x(), event.y())) {
-			if (clickpackList.mouseClicked(event, doubleClick)) {
-				return true;
-			}
-		}
-		return super.mouseClicked(event, doubleClick);
-	}
-
-	@Override
-	public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
-		if (clickpackList != null && clickpackList.isDraggingOwnScrollbar()) {
-			if (clickpackList.mouseDragged(event, deltaX, deltaY)) {
-				return true;
-			}
-		}
-		return super.mouseDragged(event, deltaX, deltaY);
-	}
-
-	@Override
-	public boolean mouseReleased(MouseButtonEvent event) {
-		if (clickpackList != null && clickpackList.isDraggingOwnScrollbar()) {
-			clickpackList.mouseReleased(event);
-			return true;
-		}
-		return super.mouseReleased(event);
 	}
 
 	@Override
@@ -384,65 +354,13 @@ public final class ClickpackBrowserScreen extends Screen {
 	}
 
 	private final class ClickpackList extends ObjectSelectionList<ClickpackEntry> {
-		private boolean draggingScrollbar;
-		private double scrollbarGrabOffset;
-
 		private ClickpackList(Minecraft minecraft, int width, int height, int y, int itemHeight) {
 			super(minecraft, width, height, y, itemHeight);
 		}
 
 		@Override
-		public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-			if (updateScrolling(event)) {
-				draggingScrollbar = true;
-				int currentScrollerTop = scrollBarY();
-				int currentScrollerBottom = currentScrollerTop + scrollerHeight();
-				if (event.y() >= currentScrollerTop && event.y() <= currentScrollerBottom) {
-					scrollbarGrabOffset = event.y() - currentScrollerTop;
-				} else {
-					scrollbarGrabOffset = scrollerHeight() / 2.0D;
-					updateScrollbarFromMouse(event.y());
-				}
-				ClickpackBrowserScreen.this.setFocused(this);
-				ClickpackBrowserScreen.this.setDragging(true);
-				setDragging(true);
-				return true;
-			}
-			return super.mouseClicked(event, doubleClick);
-		}
-
-		@Override
-		public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
-			if (draggingScrollbar) {
-				updateScrollbarFromMouse(event.y());
-				return true;
-			}
-			return super.mouseDragged(event, deltaX, deltaY);
-		}
-
-		@Override
-		public boolean mouseReleased(MouseButtonEvent event) {
-			draggingScrollbar = false;
-			return super.mouseReleased(event);
-		}
-
-		private boolean isOverOwnScrollbar(double mouseX, double mouseY) {
-			return isOverScrollbar(mouseX, mouseY);
-		}
-
-		private boolean isDraggingOwnScrollbar() {
-			return draggingScrollbar;
-		}
-
-		private void updateScrollbarFromMouse(double mouseY) {
-			int scrollerHeight = scrollerHeight();
-			int minY = getY();
-			int maxY = getBottom() - scrollerHeight;
-			double unclampedTop = mouseY - scrollbarGrabOffset;
-			double clampedTop = Math.max(minY, Math.min(unclampedTop, maxY));
-			double trackHeight = Math.max(1.0D, maxY - minY);
-			double progress = (clampedTop - minY) / trackHeight;
-			setScrollAmount(progress * maxScrollAmount());
+		public boolean mouseClicked(double mouseX, double mouseY, int button) {
+			return super.mouseClicked(mouseX, mouseY, button);
 		}
 
 		private void setEntries(List<ClickpackDbEntry> entries) {
@@ -477,7 +395,7 @@ public final class ClickpackBrowserScreen extends Screen {
 		}
 
 		@Override
-		public void renderContent(GuiGraphics graphics, int mouseX, int mouseY, boolean hovered, float a) {
+		public void render(GuiGraphics graphics, int index, int y, int x, int width, int height, int mouseX, int mouseY, boolean hovered, float a) {
 			String prefix;
 			if (controller.isKeyboardActivePack(entry.name()) && controller.isMouseActivePack(entry.name())) {
 				prefix = "[Keyboard+Mouse] ";
@@ -490,12 +408,12 @@ public final class ClickpackBrowserScreen extends Screen {
 			} else {
 				prefix = "";
 			}
-			graphics.drawString(font, Component.literal(prefix + entry.name()), getContentX(), getContentY(), 0xFFFFFFFF, false);
-			graphics.drawString(font, Component.literal(formatSize(entry.size())), getContentX(), getContentY() + 11, 0xFFB8B8B8, false);
+			graphics.drawString(font, Component.literal(prefix + entry.name()), x + 4, y + 1, 0xFFFFFFFF, false);
+			graphics.drawString(font, Component.literal(formatSize(entry.size())), x + 4, y + 12, 0xFFB8B8B8, false);
 		}
 
 		@Override
-		public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+		public boolean mouseClicked(double mouseX, double mouseY, int button) {
 			selectedEntry = entry;
 			clickpackList.setSelected(this);
 			updateButtons();
