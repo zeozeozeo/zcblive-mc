@@ -46,7 +46,7 @@ public class ZCBLiveClient implements ClientModInitializer {
 	}
 
 	private static void addTitleScreenButton(Screen screen) {
-		List<AbstractWidget> widgets = Screens.getWidgets(screen);
+		List<AbstractWidget> widgets = Screens.getButtons(screen);
 		int centerX = clamp(screen.width / 2 - MENU_BUTTON_WIDTH / 2, SCREEN_MARGIN, screen.width - MENU_BUTTON_WIDTH - SCREEN_MARGIN);
 		Integer menuRowY = widgets.stream()
 			.filter(widget -> widget.getHeight() == MENU_BUTTON_HEIGHT)
@@ -71,7 +71,7 @@ public class ZCBLiveClient implements ClientModInitializer {
 	}
 
 	private static void addPauseScreenButton(Screen screen) {
-		List<AbstractWidget> widgets = Screens.getWidgets(screen);
+		List<AbstractWidget> widgets = Screens.getButtons(screen);
 		int centerX = clamp(screen.width / 2 - MENU_BUTTON_WIDTH / 2, SCREEN_MARGIN, screen.width - MENU_BUTTON_WIDTH - SCREEN_MARGIN);
 		int buttonY = widgets.stream()
 			.filter(widget -> widget.getHeight() == MENU_BUTTON_HEIGHT)
@@ -84,7 +84,7 @@ public class ZCBLiveClient implements ClientModInitializer {
 	}
 
 	private static Button createMenuButton(Screen screen, int x, int y, int width) {
-		return Button.builder(CLICKPACKS_TEXT, ignored -> Screens.getMinecraft(screen).setScreen(new ClickpackBrowserScreen(screen)))
+		return Button.builder(CLICKPACKS_TEXT, ignored -> Screens.getClient(screen).setScreen(new ClickpackBrowserScreen(screen)))
 			.bounds(x, y, width, MENU_BUTTON_HEIGHT)
 			.build();
 	}

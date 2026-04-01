@@ -7,7 +7,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.ObjectSelectionList;
@@ -123,47 +123,47 @@ public final class ClickpackBrowserScreen extends Screen {
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+	public void render(GuiGraphics graphics, int mouseX, int mouseY, float a) {
 		int panelX = width / 2 + 8;
 		int panelY = 54;
 		int panelWidth = width - panelX - 12;
 		int panelHeight = height - panelY - 54;
 
-		graphics.centeredText(font, title, width / 2, 10, 0xFFFFFFFF);
+		graphics.drawCenteredString(font, title, width / 2, 10, 0xFFFFFFFF);
 		graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, 0x7A000000);
-		graphics.outline(panelX, panelY, panelWidth, panelHeight, 0xFF4A4A4A);
-		graphics.text(font, statusText, 12, height - 42, 0xFFD0D0D0, false);
+		graphics.renderOutline(panelX, panelY, panelWidth, panelHeight, 0xFF4A4A4A);
+		graphics.drawString(font, statusText, 12, height - 42, 0xFFD0D0D0, false);
 
-		super.extractRenderState(graphics, mouseX, mouseY, a);
+		super.render(graphics, mouseX, mouseY, a);
 		renderDetailPanel(graphics, panelX, panelY, panelWidth, panelHeight);
 	}
 
-	private void renderDetailPanel(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
+	private void renderDetailPanel(GuiGraphics graphics, int x, int y, int width, int height) {
 		if (selectedEntry == null) {
-			graphics.text(font, Component.literal("Select a clickpack from the list."), x + 8, y + 8, 0xFFFFFFFF, false);
+			graphics.drawString(font, Component.literal("Select a clickpack from the list."), x + 8, y + 8, 0xFFFFFFFF, false);
 			return;
 		}
 
 		int drawY = y + 8;
-		graphics.text(font, Component.literal(selectedEntry.name()), x + 8, drawY, 0xFFFFFFFF, false);
+		graphics.drawString(font, Component.literal(selectedEntry.name()), x + 8, drawY, 0xFFFFFFFF, false);
 		drawY += 14;
-		graphics.text(font, Component.literal("Compressed: " + formatSize(selectedEntry.size())), x + 8, drawY, 0xFFD0D0D0, false);
+		graphics.drawString(font, Component.literal("Compressed: " + formatSize(selectedEntry.size())), x + 8, drawY, 0xFFD0D0D0, false);
 		drawY += 10;
-		graphics.text(font, Component.literal("Uncompressed: " + formatSize(selectedEntry.uncompressedSize())), x + 8, drawY, 0xFFD0D0D0, false);
+		graphics.drawString(font, Component.literal("Uncompressed: " + formatSize(selectedEntry.uncompressedSize())), x + 8, drawY, 0xFFD0D0D0, false);
 		drawY += 10;
-		graphics.text(font, Component.literal("Noise: " + (selectedEntry.hasNoise() ? "yes" : "no")), x + 8, drawY, 0xFFD0D0D0, false);
+		graphics.drawString(font, Component.literal("Noise: " + (selectedEntry.hasNoise() ? "yes" : "no")), x + 8, drawY, 0xFFD0D0D0, false);
 		drawY += 10;
-		graphics.text(font, Component.literal("Installed: " + (controller.isInstalled(selectedEntry.name()) ? "yes" : "no")), x + 8, drawY, 0xFFD0D0D0, false);
+		graphics.drawString(font, Component.literal("Installed: " + (controller.isInstalled(selectedEntry.name()) ? "yes" : "no")), x + 8, drawY, 0xFFD0D0D0, false);
 		drawY += 10;
-		graphics.text(font, Component.literal("Keyboard active: " + (controller.isKeyboardActivePack(selectedEntry.name()) ? "yes" : "no")), x + 8, drawY, 0xFFD0D0D0, false);
+		graphics.drawString(font, Component.literal("Keyboard active: " + (controller.isKeyboardActivePack(selectedEntry.name()) ? "yes" : "no")), x + 8, drawY, 0xFFD0D0D0, false);
 		drawY += 10;
-		graphics.text(font, Component.literal("Mouse active: " + (controller.isMouseActivePack(selectedEntry.name()) ? "yes" : "no")), x + 8, drawY, 0xFFD0D0D0, false);
+		graphics.drawString(font, Component.literal("Mouse active: " + (controller.isMouseActivePack(selectedEntry.name()) ? "yes" : "no")), x + 8, drawY, 0xFFD0D0D0, false);
 		drawY += 14;
 
 		String updatedAt = snapshot != null && snapshot.updatedAtIso() != null ? formatRelativeTime(snapshot.updatedAtIso()) : "unknown";
-		graphics.text(font, Component.literal("DB updated: " + updatedAt), x + 8, drawY, 0xFFA8A8A8, false);
+		graphics.drawString(font, Component.literal("DB updated: " + updatedAt), x + 8, drawY, 0xFFA8A8A8, false);
 		drawY += 16;
-		graphics.text(font, Component.literal("Readme"), x + 8, drawY, 0xFFFFFFFF, false);
+		graphics.drawString(font, Component.literal("Readme"), x + 8, drawY, 0xFFFFFFFF, false);
 		drawY += 12;
 
 		String readme = selectedEntry.readme() == null || selectedEntry.readme().isBlank() ? "No readme in ClickpackDB." : selectedEntry.readme();
@@ -172,10 +172,10 @@ public final class ClickpackBrowserScreen extends Screen {
 		int rendered = 0;
 		for (FormattedCharSequence line : lines) {
 			if (rendered >= maxLines) {
-				graphics.text(font, Component.literal("..."), x + 8, drawY, 0xFFA8A8A8, false);
+				graphics.drawString(font, Component.literal("..."), x + 8, drawY, 0xFFA8A8A8, false);
 				break;
 			}
-			graphics.text(font, line, x + 8, drawY, 0xFFDCDCDC, false);
+			graphics.drawString(font, line, x + 8, drawY, 0xFFDCDCDC, false);
 			drawY += 9;
 			rendered++;
 		}
@@ -477,7 +477,7 @@ public final class ClickpackBrowserScreen extends Screen {
 		}
 
 		@Override
-		public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY, boolean hovered, float a) {
+		public void renderContent(GuiGraphics graphics, int mouseX, int mouseY, boolean hovered, float a) {
 			String prefix;
 			if (controller.isKeyboardActivePack(entry.name()) && controller.isMouseActivePack(entry.name())) {
 				prefix = "[Keyboard+Mouse] ";
@@ -490,8 +490,8 @@ public final class ClickpackBrowserScreen extends Screen {
 			} else {
 				prefix = "";
 			}
-			graphics.text(font, Component.literal(prefix + entry.name()), getContentX(), getContentY(), 0xFFFFFFFF, false);
-			graphics.text(font, Component.literal(formatSize(entry.size())), getContentX(), getContentY() + 11, 0xFFB8B8B8, false);
+			graphics.drawString(font, Component.literal(prefix + entry.name()), getContentX(), getContentY(), 0xFFFFFFFF, false);
+			graphics.drawString(font, Component.literal(formatSize(entry.size())), getContentX(), getContentY() + 11, 0xFFB8B8B8, false);
 		}
 
 		@Override
