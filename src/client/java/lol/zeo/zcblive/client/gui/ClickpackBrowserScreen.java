@@ -94,6 +94,35 @@ public final class ClickpackBrowserScreen extends Screen {
 	}
 
 	@Override
+	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+		if (clickpackList != null && clickpackList.isOverOwnScrollbar(event.x(), event.y())) {
+			if (clickpackList.mouseClicked(event, doubleClick)) {
+				return true;
+			}
+		}
+		return super.mouseClicked(event, doubleClick);
+	}
+
+	@Override
+	public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+		if (clickpackList != null && clickpackList.isDraggingOwnScrollbar()) {
+			if (clickpackList.mouseDragged(event, deltaX, deltaY)) {
+				return true;
+			}
+		}
+		return super.mouseDragged(event, deltaX, deltaY);
+	}
+
+	@Override
+	public boolean mouseReleased(MouseButtonEvent event) {
+		if (clickpackList != null && clickpackList.isDraggingOwnScrollbar()) {
+			clickpackList.mouseReleased(event);
+			return true;
+		}
+		return super.mouseReleased(event);
+	}
+
+	@Override
 	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		int panelX = width / 2 + 8;
 		int panelY = 54;
@@ -355,19 +384,65 @@ public final class ClickpackBrowserScreen extends Screen {
 	}
 
 	private final class ClickpackList extends ObjectSelectionList<ClickpackEntry> {
+		private boolean draggingScrollbar;
+		private double scrollbarGrabOffset;
+
 		private ClickpackList(Minecraft minecraft, int width, int height, int y, int itemHeight) {
 			super(minecraft, width, height, y, itemHeight);
 		}
 
 		@Override
 		public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-			boolean scrolling = updateScrolling(event);
-			if (scrolling) {
-				setFocused(this);
+			if (updateScrolling(event)) {
+				draggingScrollbar = true;
+				int currentScrollerTop = scrollBarY();
+				int currentScrollerBottom = currentScrollerTop + scrollerHeight();
+				if (event.y() >= currentScrollerTop && event.y() <= currentScrollerBottom) {
+					scrollbarGrabOffset = event.y() - currentScrollerTop;
+				} else {
+					scrollbarGrabOffset = scrollerHeight() / 2.0D;
+					updateScrollbarFromMouse(event.y());
+				}
+				ClickpackBrowserScreen.this.setFocused(this);
+				ClickpackBrowserScreen.this.setDragging(true);
 				setDragging(true);
 				return true;
 			}
 			return super.mouseClicked(event, doubleClick);
+		}
+
+		@Override
+		public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+			if (draggingScrollbar) {
+				updateScrollbarFromMouse(event.y());
+				return true;
+			}
+			return super.mouseDragged(event, deltaX, deltaY);
+		}
+
+		@Override
+		public boolean mouseReleased(MouseButtonEvent event) {
+			draggingScrollbar = false;
+			return super.mouseReleased(event);
+		}
+
+		private boolean isOverOwnScrollbar(double mouseX, double mouseY) {
+			return isOverScrollbar(mouseX, mouseY);
+		}
+
+		private boolean isDraggingOwnScrollbar() {
+			return draggingScrollbar;
+		}
+
+		private void updateScrollbarFromMouse(double mouseY) {
+			int scrollerHeight = scrollerHeight();
+			int minY = getY();
+			int maxY = getBottom() - scrollerHeight;
+			double unclampedTop = mouseY - scrollbarGrabOffset;
+			double clampedTop = Math.max(minY, Math.min(unclampedTop, maxY));
+			double trackHeight = Math.max(1.0D, maxY - minY);
+			double progress = (clampedTop - minY) / trackHeight;
+			setScrollAmount(progress * maxScrollAmount());
 		}
 
 		private void setEntries(List<ClickpackDbEntry> entries) {
