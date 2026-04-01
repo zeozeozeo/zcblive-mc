@@ -1,0 +1,15 @@
+{
+	"required": true,
+	"package": "lol.zeo.zcblive.mixin.client",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"KeyboardHandlerMixin",
+		"MouseHandlerMixin",
+		"SoundOptionsScreenMixin",
+		"SoundEngineAccessor",
+		"SoundManagerAccessor"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

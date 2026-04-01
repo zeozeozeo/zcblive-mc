@@ -1,0 +1,36 @@
+{
+	"schemaVersion": 1,
+	"id": "zcb-live",
+	"version": "${version}",
+	"name": "ZCB Live",
+	"description": "Play click and keyboard sounds ingame! The most realistic clickbot mod for Minecraft.",
+	"authors": [
+		"zeo"
+	],
+	"contact": {
+		"sources": "https://github.com/zeozeozeo/zcblive-mc"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/zcb-live/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"lol.zeo.zcblive.ZCBLive"
+		],
+		"client": [
+			"lol.zeo.zcblive.ZCBLiveClient"
+		]
+	},
+	"mixins": [
+		{
+			"config": "zcb-live.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.18.6",
+		"minecraft": "~26.1.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
