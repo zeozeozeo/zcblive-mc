@@ -11,10 +11,10 @@ jobs:
       - name: validate gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
-      - name: setup jdk 8
+      - name: setup jdk
         uses: actions/setup-java@v4
         with:
-          java-version: '8'
+          java-version: ${{ github.ref_name == '1.8.9' && '8' || (github.ref_name == 'main' && '25' || '21') }}
           distribution: 'temurin'
 
       - name: make gradle wrapper executable
