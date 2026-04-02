@@ -1,0 +1,16 @@
+[
+{
+  "modid": "zcblive",
+  "name": "ZCB Live",
+  "description": "Backport of the ZCB Live clickpack mod for Forge 1.8.9.",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "https://github.com/zeozeozeo/zcblive-mc",
+  "updateUrl": "",
+  "authorList": ["zeozeozeo", "backport by Codex"],
+  "credits": "Original Fabric mod by zeozeozeo",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]
