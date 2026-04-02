@@ -9,10 +9,10 @@ import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.client.event.GuiScreenEvent;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.InputEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
+import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.gameevent.InputEvent;
+import cpw.mods.fml.common.gameevent.TickEvent;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
@@ -68,7 +68,11 @@ public final class ZcbForgeClient {
         if (button < 0) {
             return;
         }
-        controller.handleMouseEvent(button, Mouse.getEventButtonState(), Mouse.getEventNanoseconds());
+        boolean state = Mouse.getEventButtonState();
+        controller.handleMouseEvent(button, state, Mouse.getEventNanoseconds());
+        if (button == 3 || button == 4) {
+            controller.handleScreenMouseEvent(button, state);
+        }
     }
 
     @SubscribeEvent
@@ -166,15 +170,6 @@ public final class ZcbForgeClient {
 
         Minecraft.getMinecraft().displayGuiScreen(new ClickpackBrowserScreen(event.gui, controller));
         event.setCanceled(true);
-    }
-
-    @SubscribeEvent
-    public void onGuiMouseInputPost(GuiScreenEvent.MouseInputEvent.Post event) {
-        int button = Mouse.getEventButton();
-        if (button != 3 && button != 4) {
-            return;
-        }
-        controller.handleScreenMouseEvent(button, Mouse.getEventButtonState());
     }
 
     private boolean containsButton(List<GuiButton> buttonList, int id) {

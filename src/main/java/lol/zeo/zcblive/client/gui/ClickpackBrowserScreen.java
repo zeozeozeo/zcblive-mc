@@ -1,6 +1,6 @@
 package lol.zeo.zcblive.client.gui;
 
-import java.io.IOException;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
@@ -14,6 +14,7 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiSlot;
 import net.minecraft.client.gui.GuiTextField;
+import net.minecraft.client.renderer.Tessellator;
 import org.lwjgl.input.Keyboard;
 
 public final class ClickpackBrowserScreen extends GuiScreen {
@@ -56,7 +57,7 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         this.buttonList.clear();
 
         int searchWidth = width - 24;
-        searchBox = new GuiTextField(0, fontRendererObj, 12, 28, searchWidth, 18);
+        searchBox = new GuiTextField(fontRendererObj, 12, 28, searchWidth, 18);
         searchBox.setMaxStringLength(128);
         searchBox.setCanLoseFocus(true);
         searchBox.setFocused(true);
@@ -110,19 +111,13 @@ public final class ClickpackBrowserScreen extends GuiScreen {
     }
 
     @Override
-    public void handleMouseInput() throws IOException {
-        super.handleMouseInput();
-        clickpackList.handleMouseInput();
-    }
-
-    @Override
-    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
+    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) {
         super.mouseClicked(mouseX, mouseY, mouseButton);
         searchBox.mouseClicked(mouseX, mouseY, mouseButton);
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) throws IOException {
+    protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == Keyboard.KEY_ESCAPE) {
             mc.displayGuiScreen(parent);
             return;
@@ -133,7 +128,7 @@ public final class ClickpackBrowserScreen extends GuiScreen {
     }
 
     @Override
-    protected void actionPerformed(GuiButton button) throws IOException {
+    protected void actionPerformed(GuiButton button) {
         if (button == null || !button.enabled) {
             return;
         }
@@ -428,9 +423,26 @@ public final class ClickpackBrowserScreen extends GuiScreen {
     }
 
     private void scheduleOnMainThread(Runnable runnable) {
-        if (mc != null) {
-            mc.addScheduledTask(runnable);
+        if (mc == null) {
+            runnable.run();
+            return;
         }
+
+        try {
+            Method addScheduledTask = mc.getClass().getMethod("addScheduledTask", Runnable.class);
+            addScheduledTask.invoke(mc, runnable);
+            return;
+        } catch (Exception ignored) {
+        }
+
+        try {
+            Method legacySchedule = mc.getClass().getMethod("func_152344_a", Runnable.class);
+            legacySchedule.invoke(mc, runnable);
+            return;
+        } catch (Exception ignored) {
+        }
+
+        runnable.run();
     }
 
     private GuiButton addButtonCompat(GuiButton button) {
@@ -472,7 +484,7 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         }
 
         @Override
-        protected void drawSlot(int entryId, int x, int y, int slotHeight, int mouseX, int mouseY) {
+        protected void drawSlot(int entryId, int x, int y, int slotHeight, Tessellator tessellator, int mouseX, int mouseY) {
             ClickpackDbEntry entry = filteredEntries.get(entryId);
             String prefix;
             if (controller.isKeyboardActivePack(entry.name()) && controller.isMouseActivePack(entry.name())) {

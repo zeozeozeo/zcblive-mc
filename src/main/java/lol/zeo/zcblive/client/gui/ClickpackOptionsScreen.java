@@ -237,7 +237,7 @@ public final class ClickpackOptionsScreen extends GuiScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) throws IOException {
+    protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == Keyboard.KEY_ESCAPE) {
             this.mc.displayGuiScreen(parent);
             return;
@@ -246,7 +246,7 @@ public final class ClickpackOptionsScreen extends GuiScreen {
     }
 
     @Override
-    protected void actionPerformed(GuiButton button) throws IOException {
+    protected void actionPerformed(GuiButton button) {
         if (button == null || !button.enabled) {
             return;
         }
@@ -418,7 +418,7 @@ public final class ClickpackOptionsScreen extends GuiScreen {
         }
 
         @Override
-        protected int getHoverState(boolean mouseOver) {
+        public int getHoverState(boolean mouseOver) {
             return 0;
         }
 
