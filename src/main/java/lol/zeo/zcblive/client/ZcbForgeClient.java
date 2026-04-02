@@ -73,13 +73,14 @@ public final class ZcbForgeClient {
 
     @SubscribeEvent
     public void onScreenInit(GuiScreenEvent.InitGuiEvent.Post event) {
-        GuiScreen gui = event.gui;
+        GuiScreen gui = event.getGui();
+        List<GuiButton> buttonList = event.getButtonList();
         if (gui instanceof GuiMainMenu) {
-            addTitleScreenButton(gui, event.buttonList);
+            addTitleScreenButton(gui, buttonList);
             return;
         }
         if (gui instanceof GuiIngameMenu) {
-            addPauseScreenButton(gui, event.buttonList);
+            addPauseScreenButton(gui, buttonList);
         }
     }
 
@@ -100,12 +101,12 @@ public final class ZcbForgeClient {
             if (button.width < 90 || button.width > 110) {
                 continue;
             }
-            int centerDelta = Math.abs((button.xPosition + button.width / 2) - gui.width / 2);
+            int centerDelta = Math.abs((button.x + button.width / 2) - gui.width / 2);
             if (centerDelta > 130) {
                 continue;
             }
-            if (menuRowY == null || button.yPosition > menuRowY.intValue()) {
-                menuRowY = Integer.valueOf(button.yPosition);
+            if (menuRowY == null || button.y > menuRowY.intValue()) {
+                menuRowY = Integer.valueOf(button.y);
             }
         }
 
@@ -142,12 +143,12 @@ public final class ZcbForgeClient {
             if (button.width < 180) {
                 continue;
             }
-            int centerDelta = Math.abs((button.xPosition + button.width / 2) - gui.width / 2);
+            int centerDelta = Math.abs((button.x + button.width / 2) - gui.width / 2);
             if (centerDelta > 24) {
                 continue;
             }
-            if (menuRowY == null || button.yPosition > menuRowY.intValue()) {
-                menuRowY = Integer.valueOf(button.yPosition);
+            if (menuRowY == null || button.y > menuRowY.intValue()) {
+                menuRowY = Integer.valueOf(button.y);
             }
         }
 
@@ -159,12 +160,12 @@ public final class ZcbForgeClient {
 
     @SubscribeEvent
     public void onScreenAction(GuiScreenEvent.ActionPerformedEvent.Pre event) {
-        GuiButton button = event.button;
+        GuiButton button = event.getButton();
         if (button == null || button.id != MENU_BUTTON_ID) {
             return;
         }
 
-        Minecraft.getMinecraft().displayGuiScreen(new ClickpackBrowserScreen(event.gui, controller));
+        Minecraft.getMinecraft().displayGuiScreen(new ClickpackBrowserScreen(event.getGui(), controller));
         event.setCanceled(true);
     }
 

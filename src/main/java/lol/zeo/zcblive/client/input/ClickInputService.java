@@ -92,7 +92,7 @@ public final class ClickInputService {
         ZcbConfig config = configSupplier.get();
         LoadedClickpack primaryClickpack = keyboardClickpackSupplier.get();
         LoadedClickpack secondaryClickpack = mouseClickpackSupplier.get();
-        if (minecraft == null || minecraft.theWorld == null || config == null || !config.enabled || (primaryClickpack == null && secondaryClickpack == null)) {
+        if (minecraft == null || minecraft.world == null || config == null || !config.enabled || (primaryClickpack == null && secondaryClickpack == null)) {
             return;
         }
 
@@ -151,7 +151,7 @@ public final class ClickInputService {
         ZcbConfig config = configSupplier.get();
         LoadedClickpack primaryClickpack = keyboardLane ? keyboardClickpackSupplier.get() : mouseClickpackSupplier.get();
         LoadedClickpack secondaryClickpack = keyboardLane ? mouseClickpackSupplier.get() : keyboardClickpackSupplier.get();
-        if (minecraft == null || minecraft.theWorld == null || config == null || !config.enabled || (primaryClickpack == null && secondaryClickpack == null)) {
+        if (minecraft == null || minecraft.world == null || config == null || !config.enabled || (primaryClickpack == null && secondaryClickpack == null)) {
             return;
         }
 

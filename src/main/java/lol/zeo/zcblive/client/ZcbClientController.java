@@ -231,7 +231,7 @@ public final class ZcbClientController {
 
     public void tick() {
         Minecraft minecraft = Minecraft.getMinecraft();
-        boolean allowNoise = minecraft != null && minecraft.theWorld != null && config.enabled && config.playNoise;
+        boolean allowNoise = minecraft != null && minecraft.world != null && config.enabled && config.playNoise;
         clickAudioService.syncNoiseLoop(desiredNoiseSample(), config.clickVolume, allowNoise);
         clickAudioService.tick();
     }

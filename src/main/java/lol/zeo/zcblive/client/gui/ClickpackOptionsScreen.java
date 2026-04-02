@@ -287,11 +287,11 @@ public final class ClickpackOptionsScreen extends GuiScreen {
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         drawDefaultBackground();
-        drawCenteredString(this.fontRendererObj, tr("gui.zcb-live.clickpack_options.title"), this.width / 2, 10, 0xFFFFFFFF);
-        drawString(this.fontRendererObj, tr("gui.zcb-live.clickpack_options.general"), sectionTextX, generalHeaderY, 0xFFD8D8D8);
-        drawString(this.fontRendererObj, tr("gui.zcb-live.clickpack_options.click_types"), sectionTextX, clickTypesHeaderY, 0xFFD8D8D8);
-        drawString(this.fontRendererObj, tr("gui.zcb-live.clickpack_options.timings"), sectionTextX, timingsHeaderY, 0xFFD8D8D8);
-        drawString(this.fontRendererObj, tr("gui.zcb-live.clickpack_options.volume_changes"), sectionTextX, volumeHeaderY, 0xFFD8D8D8);
+        drawCenteredString(this.fontRenderer, tr("gui.zcb-live.clickpack_options.title"), this.width / 2, 10, 0xFFFFFFFF);
+        drawString(this.fontRenderer, tr("gui.zcb-live.clickpack_options.general"), sectionTextX, generalHeaderY, 0xFFD8D8D8);
+        drawString(this.fontRenderer, tr("gui.zcb-live.clickpack_options.click_types"), sectionTextX, clickTypesHeaderY, 0xFFD8D8D8);
+        drawString(this.fontRenderer, tr("gui.zcb-live.clickpack_options.timings"), sectionTextX, timingsHeaderY, 0xFFD8D8D8);
+        drawString(this.fontRenderer, tr("gui.zcb-live.clickpack_options.volume_changes"), sectionTextX, volumeHeaderY, 0xFFD8D8D8);
         super.drawScreen(mouseX, mouseY, partialTicks);
     }
 
@@ -438,9 +438,9 @@ public final class ClickpackOptionsScreen extends GuiScreen {
                 updateFromMouse(mouseX);
             }
             if (this.visible) {
-                int knobX = this.xPosition + (int) (this.sliderPosition * (this.width - 8));
-                this.drawTexturedModalRect(knobX, this.yPosition, 0, 66, 4, 20);
-                this.drawTexturedModalRect(knobX + 4, this.yPosition, 196, 66, 4, 20);
+                int knobX = this.x + (int) (this.sliderPosition * (this.width - 8));
+                this.drawTexturedModalRect(knobX, this.y, 0, 66, 4, 20);
+                this.drawTexturedModalRect(knobX + 4, this.y, 196, 66, 4, 20);
             }
         }
 
@@ -450,7 +450,7 @@ public final class ClickpackOptionsScreen extends GuiScreen {
         }
 
         private void updateFromMouse(int mouseX) {
-            float normalized = (mouseX - (this.xPosition + 4)) / (float) (this.width - 8);
+            float normalized = (mouseX - (this.x + 4)) / (float) (this.width - 8);
             this.sliderPosition = MathHelper.clamp_float(normalized, 0.0F, 1.0F);
             this.value = this.min + (this.max - this.min) * this.sliderPosition;
             updateDisplayString();

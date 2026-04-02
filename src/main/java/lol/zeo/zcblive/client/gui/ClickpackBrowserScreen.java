@@ -56,7 +56,7 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         this.buttonList.clear();
 
         int searchWidth = width - 24;
-        searchBox = new GuiTextField(0, fontRendererObj, 12, 28, searchWidth, 18);
+        searchBox = new GuiTextField(0, fontRenderer, 12, 28, searchWidth, 18);
         searchBox.setMaxStringLength(128);
         searchBox.setCanLoseFocus(true);
         searchBox.setFocused(true);
@@ -171,17 +171,17 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         int panelWidth = width - panelX - 12;
         int panelHeight = height - panelY - 84;
 
-        drawCenteredString(fontRendererObj, "ClickpackDB", width / 2, 10, 0xFFFFFFFF);
+        drawCenteredString(fontRenderer, "ClickpackDB", width / 2, 10, 0xFFFFFFFF);
         drawRect(panelX, panelY, panelX + panelWidth, panelY + panelHeight, 0x7A000000);
         drawHorizontalLine(panelX, panelX + panelWidth - 1, panelY, 0xFF4A4A4A);
         drawHorizontalLine(panelX, panelX + panelWidth - 1, panelY + panelHeight - 1, 0xFF4A4A4A);
         drawVerticalLine(panelX, panelY, panelY + panelHeight - 1, 0xFF4A4A4A);
         drawVerticalLine(panelX + panelWidth - 1, panelY, panelY + panelHeight - 1, 0xFF4A4A4A);
-        drawString(fontRendererObj, statusText, 12, height - 72, 0xFFD0D0D0);
+        drawString(fontRenderer, statusText, 12, height - 72, 0xFFD0D0D0);
 
         searchBox.drawTextBox();
         if (!searchBox.isFocused() && searchBox.getText().isEmpty()) {
-            drawString(fontRendererObj, "Search clickpacks", searchBox.xPosition + 4, searchBox.yPosition + 6, 0xFF808080);
+            drawString(fontRenderer, "Search clickpacks", searchBox.x + 4, searchBox.y + 6, 0xFF808080);
         }
 
         renderDetailPanel(panelX, panelY, panelWidth, panelHeight);
@@ -191,44 +191,44 @@ public final class ClickpackBrowserScreen extends GuiScreen {
 
     private void renderDetailPanel(int x, int y, int width, int height) {
         if (selectedEntry == null) {
-            drawString(fontRendererObj, "Select a clickpack from the list.", x + 8, y + 8, 0xFFFFFFFF);
+            drawString(fontRenderer, "Select a clickpack from the list.", x + 8, y + 8, 0xFFFFFFFF);
             return;
         }
 
         int drawY = y + 8;
-        drawString(fontRendererObj, selectedEntry.name(), x + 8, drawY, 0xFFFFFFFF);
+        drawString(fontRenderer, selectedEntry.name(), x + 8, drawY, 0xFFFFFFFF);
         drawY += 14;
-        drawString(fontRendererObj, "Compressed: " + formatSize(selectedEntry.size()), x + 8, drawY, 0xFFD0D0D0);
+        drawString(fontRenderer, "Compressed: " + formatSize(selectedEntry.size()), x + 8, drawY, 0xFFD0D0D0);
         drawY += 10;
-        drawString(fontRendererObj, "Uncompressed: " + formatSize(selectedEntry.uncompressedSize()), x + 8, drawY, 0xFFD0D0D0);
+        drawString(fontRenderer, "Uncompressed: " + formatSize(selectedEntry.uncompressedSize()), x + 8, drawY, 0xFFD0D0D0);
         drawY += 10;
-        drawString(fontRendererObj, "Noise: " + (selectedEntry.hasNoise() ? "yes" : "no"), x + 8, drawY, 0xFFD0D0D0);
+        drawString(fontRenderer, "Noise: " + (selectedEntry.hasNoise() ? "yes" : "no"), x + 8, drawY, 0xFFD0D0D0);
         drawY += 10;
-        drawString(fontRendererObj, "Installed: " + (controller.isInstalled(selectedEntry.name()) ? "yes" : "no"), x + 8, drawY, 0xFFD0D0D0);
+        drawString(fontRenderer, "Installed: " + (controller.isInstalled(selectedEntry.name()) ? "yes" : "no"), x + 8, drawY, 0xFFD0D0D0);
         drawY += 10;
-        drawString(fontRendererObj, "Keyboard active: " + (controller.isKeyboardActivePack(selectedEntry.name()) ? "yes" : "no"), x + 8, drawY, 0xFFD0D0D0);
+        drawString(fontRenderer, "Keyboard active: " + (controller.isKeyboardActivePack(selectedEntry.name()) ? "yes" : "no"), x + 8, drawY, 0xFFD0D0D0);
         drawY += 10;
-        drawString(fontRendererObj, "Mouse active: " + (controller.isMouseActivePack(selectedEntry.name()) ? "yes" : "no"), x + 8, drawY, 0xFFD0D0D0);
+        drawString(fontRenderer, "Mouse active: " + (controller.isMouseActivePack(selectedEntry.name()) ? "yes" : "no"), x + 8, drawY, 0xFFD0D0D0);
         drawY += 14;
 
         String updatedAt = snapshot != null && snapshot.updatedAtIso() != null ? formatRelativeTime(snapshot.updatedAtIso()) : "unknown";
-        drawString(fontRendererObj, "DB updated: " + updatedAt, x + 8, drawY, 0xFFA8A8A8);
+        drawString(fontRenderer, "DB updated: " + updatedAt, x + 8, drawY, 0xFFA8A8A8);
         drawY += 16;
-        drawString(fontRendererObj, "Readme", x + 8, drawY, 0xFFFFFFFF);
+        drawString(fontRenderer, "Readme", x + 8, drawY, 0xFFFFFFFF);
         drawY += 12;
 
         String readme = selectedEntry.readme() == null || selectedEntry.readme().trim().isEmpty()
             ? "No readme in ClickpackDB."
             : selectedEntry.readme();
-        List<String> lines = fontRendererObj.listFormattedStringToWidth(readme, width - 16);
+        List<String> lines = fontRenderer.listFormattedStringToWidth(readme, width - 16);
         int maxLines = Math.max(1, (height - (drawY - y) - 8) / 9);
         int rendered = 0;
         for (String line : lines) {
             if (rendered >= maxLines) {
-                drawString(fontRendererObj, "...", x + 8, drawY, 0xFFA8A8A8);
+                drawString(fontRenderer, "...", x + 8, drawY, 0xFFA8A8A8);
                 break;
             }
-            drawString(fontRendererObj, line, x + 8, drawY, 0xFFDCDCDC);
+            drawString(fontRenderer, line, x + 8, drawY, 0xFFDCDCDC);
             drawY += 9;
             rendered++;
         }
@@ -472,7 +472,7 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         }
 
         @Override
-        protected void drawSlot(int entryId, int x, int y, int slotHeight, int mouseX, int mouseY) {
+        protected void drawSlot(int entryId, int x, int y, int slotHeight, int mouseX, int mouseY, float partialTicks) {
             ClickpackDbEntry entry = filteredEntries.get(entryId);
             String prefix;
             if (controller.isKeyboardActivePack(entry.name()) && controller.isMouseActivePack(entry.name())) {
@@ -486,8 +486,8 @@ public final class ClickpackBrowserScreen extends GuiScreen {
             } else {
                 prefix = "";
             }
-            fontRendererObj.drawString(prefix + entry.name(), x + 2, y + 2, 0xFFFFFFFF);
-            fontRendererObj.drawString(formatSize(entry.size()), x + 2, y + 13, 0xFFB8B8B8);
+            fontRenderer.drawString(prefix + entry.name(), x + 2, y + 2, 0xFFFFFFFF);
+            fontRenderer.drawString(formatSize(entry.size()), x + 2, y + 13, 0xFFB8B8B8);
         }
 
         @Override
