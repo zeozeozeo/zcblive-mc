@@ -2,12 +2,14 @@ package lol.zeo.zcblive.client.gui;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.function.DoubleFunction;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.OptionInstance;
 import net.minecraft.client.Options;
+import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.options.OptionsSubScreen;
@@ -36,7 +38,7 @@ public final class ClickpackOptionsScreen extends OptionsSubScreen {
 		ZcbClientController controller = ZCBLiveClient.controller();
 		ZcbConfig config = controller.config();
 
-		list.addHeader(GENERAL_HEADER);
+		list.addSmall(List.of(headerWidget(GENERAL_HEADER)));
 		list.addBig(booleanOption("options.zcb-live.enabled", config.enabled, value -> controller.updateConfig(current -> current.enabled = value)));
 		list.addBig(inputModeOption(controller, config.inputMode));
 		list.addBig(intOption(
@@ -49,14 +51,14 @@ public final class ClickpackOptionsScreen extends OptionsSubScreen {
 		));
 		list.addBig(booleanOption("options.zcb-live.play_noise", config.playNoise, value -> controller.updateConfig(current -> current.playNoise = value)));
 
-		list.addHeader(CLICK_TYPES_HEADER);
+		list.addSmall(List.of(headerWidget(CLICK_TYPES_HEADER)));
 		list.addBig(booleanOption(
 			"options.zcb-live.hard_clicks",
 			hardClicksEnabled(config),
 			value -> controller.updateConfig(current -> current.hardClicksEnabled = value)
 		));
 
-		list.addHeader(TIMINGS_HEADER);
+		list.addSmall(List.of(headerWidget(TIMINGS_HEADER)));
 		list.addBig(doubleOption(
 			"options.zcb-live.timing.hard",
 			0.0D,
@@ -82,7 +84,7 @@ public final class ClickpackOptionsScreen extends OptionsSubScreen {
 			value -> controller.updateConfig(current -> current.timings.soft = value)
 		));
 
-		list.addHeader(VOLUME_HEADER);
+		list.addSmall(List.of(headerWidget(VOLUME_HEADER)));
 		list.addBig(booleanOption(
 			"options.zcb-live.volume_changes.enabled",
 			config.volumeSettings.enabled,
@@ -142,6 +144,10 @@ public final class ClickpackOptionsScreen extends OptionsSubScreen {
 		footer.addChild(Button.builder(Component.translatable("gui.zcb-live.clickpack_options.reset"), ignored -> resetDefaults()).width(buttonWidth).build());
 		footer.addChild(Button.builder(CommonComponents.GUI_DONE, ignored -> onClose()).width(buttonWidth).build());
 		layout.addToFooter(footer);
+	}
+
+	private StringWidget headerWidget(Component header) {
+		return new StringWidget(0, 0, 310, 9, header, font).alignLeft().setColor(0xFFA8A8A8);
 	}
 
 	private OptionInstance<Boolean> booleanOption(String key, boolean currentValue, IOBooleanAction action) {

@@ -94,18 +94,8 @@ public class ZCBLiveClient implements ClientModInitializer {
 	}
 
 	private static void registerScreenInputHooks(Screen screen) {
-		ScreenMouseEvents.afterMouseClick(screen).register((currentScreen, context, consumed) -> {
-			if (consumed) {
-				CONTROLLER.handleScreenMouseEvent(context.button(), true);
-			}
-			return consumed;
-		});
-		ScreenMouseEvents.afterMouseRelease(screen).register((currentScreen, context, consumed) -> {
-			if (consumed) {
-				CONTROLLER.handleScreenMouseEvent(context.button(), false);
-			}
-			return consumed;
-		});
+		ScreenMouseEvents.afterMouseClick(screen).register((currentScreen, mouseX, mouseY, button) -> CONTROLLER.handleScreenMouseEvent(button, true));
+		ScreenMouseEvents.afterMouseRelease(screen).register((currentScreen, mouseX, mouseY, button) -> CONTROLLER.handleScreenMouseEvent(button, false));
 	}
 
 	private static int clamp(int value, int min, int max) {
