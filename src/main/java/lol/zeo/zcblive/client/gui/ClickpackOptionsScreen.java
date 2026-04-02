@@ -9,7 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
-import net.minecraft.util.MathHelper;
+import net.minecraft.util.math.MathHelper;
 import org.lwjgl.input.Keyboard;
 
 public final class ClickpackOptionsScreen extends GuiScreen {
@@ -451,7 +451,7 @@ public final class ClickpackOptionsScreen extends GuiScreen {
 
         private void updateFromMouse(int mouseX) {
             float normalized = (mouseX - (this.x + 4)) / (float) (this.width - 8);
-            this.sliderPosition = MathHelper.clamp_float(normalized, 0.0F, 1.0F);
+            this.sliderPosition = MathHelper.clamp(normalized, 0.0F, 1.0F);
             this.value = this.min + (this.max - this.min) * this.sliderPosition;
             updateDisplayString();
             try {
@@ -466,7 +466,7 @@ public final class ClickpackOptionsScreen extends GuiScreen {
         }
 
         private void setValue(double value) {
-            this.value = MathHelper.clamp_double(value, this.min, this.max);
+            this.value = MathHelper.clamp(value, this.min, this.max);
             if (this.max <= this.min) {
                 this.sliderPosition = 0.0F;
             } else {

@@ -9,9 +9,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import lol.zeo.zcblive.ZCBLiveMod;
 import lol.zeo.zcblive.client.clickpack.ClickSample;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.audio.SoundCategory;
 import net.minecraft.client.audio.SoundHandler;
 import net.minecraft.client.audio.SoundManager;
+import net.minecraft.util.SoundCategory;
 import paulscode.sound.SoundSystem;
 import paulscode.sound.SoundSystemConfig;
 
