@@ -1,0 +1,193 @@
+package lol.zeo.zcblive.client;
+
+import java.util.List;
+import lol.zeo.zcblive.client.gui.ClickpackBrowserScreen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.GuiIngameMenu;
+import net.minecraft.client.gui.GuiMainMenu;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.client.event.GuiScreenEvent;
+import net.minecraftforge.fml.common.FMLCommonHandler;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.InputEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
+import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
+
+public final class ZcbForgeClient {
+    private static final int MENU_BUTTON_ID = 904218;
+    private static final String MENU_BUTTON_TEXT = "Clickpacks";
+    private static final int MENU_BUTTON_WIDTH = 200;
+    private static final int MENU_BUTTON_HEIGHT = 20;
+    private static final int CORNER_BUTTON_WIDTH = 120;
+    private static final int SCREEN_MARGIN = 12;
+
+    private static ZcbForgeClient instance;
+
+    private final ZcbClientController controller = new ZcbClientController();
+
+    public void initialize() {
+        instance = this;
+        controller.initialize();
+        MinecraftForge.EVENT_BUS.register(this);
+        FMLCommonHandler.instance().bus().register(this);
+    }
+
+    public static ZcbForgeClient instance() {
+        return instance;
+    }
+
+    public ZcbClientController controller() {
+        return controller;
+    }
+
+    @SubscribeEvent
+    public void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) {
+            controller.tick();
+        }
+    }
+
+    @SubscribeEvent
+    public void onKeyInput(InputEvent.KeyInputEvent event) {
+        if (Keyboard.isRepeatEvent()) {
+            return;
+        }
+        int keyCode = Keyboard.getEventKey();
+        if (keyCode == Keyboard.KEY_NONE) {
+            keyCode = Keyboard.getEventCharacter() + 256;
+        }
+        controller.handleKeyboardEvent(keyCode, Keyboard.getEventKeyState(), Keyboard.getEventNanoseconds());
+    }
+
+    @SubscribeEvent
+    public void onMouseInput(InputEvent.MouseInputEvent event) {
+        int button = Mouse.getEventButton();
+        if (button < 0) {
+            return;
+        }
+        controller.handleMouseEvent(button, Mouse.getEventButtonState(), Mouse.getEventNanoseconds());
+    }
+
+    @SubscribeEvent
+    public void onScreenInit(GuiScreenEvent.InitGuiEvent.Post event) {
+        GuiScreen gui = event.getGui();
+        List<GuiButton> buttonList = event.getButtonList();
+        if (gui instanceof GuiMainMenu) {
+            addTitleScreenButton(gui, buttonList);
+            return;
+        }
+        if (gui instanceof GuiIngameMenu) {
+            addPauseScreenButton(gui, buttonList);
+        }
+    }
+
+    private void addTitleScreenButton(GuiScreen gui, List<GuiButton> buttonList) {
+        if (containsButton(buttonList, MENU_BUTTON_ID)) {
+            return;
+        }
+
+        int centerX = clamp(gui.width / 2 - MENU_BUTTON_WIDTH / 2, SCREEN_MARGIN, gui.width - MENU_BUTTON_WIDTH - SCREEN_MARGIN);
+        Integer menuRowY = null;
+        for (GuiButton button : buttonList) {
+            if (button == null) {
+                continue;
+            }
+            if (button.height != MENU_BUTTON_HEIGHT) {
+                continue;
+            }
+            if (button.width < 90 || button.width > 110) {
+                continue;
+            }
+            int centerDelta = Math.abs((button.x + button.width / 2) - gui.width / 2);
+            if (centerDelta > 130) {
+                continue;
+            }
+            if (menuRowY == null || button.y > menuRowY.intValue()) {
+                menuRowY = Integer.valueOf(button.y);
+            }
+        }
+
+        final int x;
+        final int y;
+        final int width;
+        if (menuRowY != null) {
+            x = centerX;
+            width = MENU_BUTTON_WIDTH;
+            y = Math.min(menuRowY.intValue() + 24, gui.height - MENU_BUTTON_HEIGHT - SCREEN_MARGIN);
+        } else {
+            width = CORNER_BUTTON_WIDTH;
+            x = Math.max(SCREEN_MARGIN, gui.width - width - SCREEN_MARGIN);
+            y = SCREEN_MARGIN;
+        }
+
+        buttonList.add(new GuiButton(MENU_BUTTON_ID, x, y, width, MENU_BUTTON_HEIGHT, MENU_BUTTON_TEXT));
+    }
+
+    private void addPauseScreenButton(GuiScreen gui, List<GuiButton> buttonList) {
+        if (containsButton(buttonList, MENU_BUTTON_ID)) {
+            return;
+        }
+
+        int centerX = clamp(gui.width / 2 - MENU_BUTTON_WIDTH / 2, SCREEN_MARGIN, gui.width - MENU_BUTTON_WIDTH - SCREEN_MARGIN);
+        Integer menuRowY = null;
+        for (GuiButton button : buttonList) {
+            if (button == null) {
+                continue;
+            }
+            if (button.height != MENU_BUTTON_HEIGHT) {
+                continue;
+            }
+            if (button.width < 180) {
+                continue;
+            }
+            int centerDelta = Math.abs((button.x + button.width / 2) - gui.width / 2);
+            if (centerDelta > 24) {
+                continue;
+            }
+            if (menuRowY == null || button.y > menuRowY.intValue()) {
+                menuRowY = Integer.valueOf(button.y);
+            }
+        }
+
+        int y = menuRowY == null
+            ? SCREEN_MARGIN
+            : Math.min(menuRowY.intValue() + 24, gui.height - MENU_BUTTON_HEIGHT - SCREEN_MARGIN);
+        buttonList.add(new GuiButton(MENU_BUTTON_ID, centerX, y, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT, MENU_BUTTON_TEXT));
+    }
+
+    @SubscribeEvent
+    public void onScreenAction(GuiScreenEvent.ActionPerformedEvent.Pre event) {
+        GuiButton button = event.getButton();
+        if (button == null || button.id != MENU_BUTTON_ID) {
+            return;
+        }
+
+        Minecraft.getMinecraft().displayGuiScreen(new ClickpackBrowserScreen(event.getGui(), controller));
+        event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public void onGuiMouseInputPost(GuiScreenEvent.MouseInputEvent.Post event) {
+        int button = Mouse.getEventButton();
+        if (button != 3 && button != 4) {
+            return;
+        }
+        controller.handleScreenMouseEvent(button, Mouse.getEventButtonState());
+    }
+
+    private boolean containsButton(List<GuiButton> buttonList, int id) {
+        for (GuiButton button : buttonList) {
+            if (button != null && button.id == id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+}
