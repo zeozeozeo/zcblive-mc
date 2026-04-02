@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
@@ -68,6 +69,12 @@ public final class ZcbClientController {
 		}
 	}
 
+	public void handleScreenMouseEvent(int button, boolean press) {
+		if (inputService != null) {
+			inputService.handleScreenMouse(button, press);
+		}
+	}
+
 	public synchronized @Nullable LoadedClickpack getKeyboardClickpack() {
 		return activeKeyboardClickpack;
 	}
@@ -96,6 +103,10 @@ public final class ZcbClientController {
 		return config.inputMode;
 	}
 
+	public synchronized ZcbConfig config() {
+		return config;
+	}
+
 	public synchronized double clickVolume() {
 		return config.clickVolume;
 	}
@@ -112,6 +123,17 @@ public final class ZcbClientController {
 	public synchronized void setClickVolume(double clickVolume) throws IOException {
 		config.clickVolume = Math.max(0.0D, Math.min(clickVolume, 5.0D));
 		saveConfig();
+	}
+
+	public synchronized void updateConfig(Consumer<ZcbConfig> updater) throws IOException {
+		updater.accept(config);
+		saveConfig();
+	}
+
+	public synchronized void resetConfigToDefaults() throws IOException {
+		config = new ZcbConfig().normalize();
+		saveConfig();
+		reloadAssignedClickpacks();
 	}
 
 	public synchronized void togglePlayNoise() throws IOException {
@@ -171,7 +193,7 @@ public final class ZcbClientController {
 
 	public void tick() {
 		Minecraft minecraft = Minecraft.getInstance();
-		boolean allowNoise = minecraft != null && minecraft.level != null && config.playNoise;
+		boolean allowNoise = minecraft != null && minecraft.level != null && config.enabled && config.playNoise;
 		clickAudioService.syncNoiseLoop(desiredNoiseSample(), config.clickVolume, allowNoise);
 	}
 

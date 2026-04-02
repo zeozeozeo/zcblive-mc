@@ -21,6 +21,7 @@ public final class ClickInputService {
 	private static final double KEYBOARD_MERGE_WINDOW = 0.014D;
 	private static final double KEYBOARD_CHORD_VOLUME_STEP = 0.16D;
 	private static final double KEYBOARD_CHORD_VOLUME_FLOOR = 0.45D;
+	private static final double DUPLICATE_MOUSE_EVENT_WINDOW = 0.01D;
 
 	private final Supplier<ZcbConfig> configSupplier;
 	private final Supplier<@Nullable LoadedClickpack> keyboardClickpackSupplier;
@@ -28,6 +29,9 @@ public final class ClickInputService {
 	private final ClickAudioService audioService;
 	private final KeyboardState keyboard = new KeyboardState();
 	private final LaneState mouse = new LaneState();
+	private int lastMouseEventButton = Integer.MIN_VALUE;
+	private boolean lastMouseEventPress;
+	private double lastMouseEventTime = Double.NEGATIVE_INFINITY;
 
 	public ClickInputService(
 		Supplier<ZcbConfig> configSupplier,
@@ -57,14 +61,22 @@ public final class ClickInputService {
 		if (config == null || config.inputMode == ZcbConfig.InputMode.KEYBOARD_ONLY) {
 			return;
 		}
+		if (isDuplicateMouseEvent(button, press)) {
+			return;
+		}
 		handleLane(mouse, button, press, false);
+	}
+
+	public void handleScreenMouse(int button, boolean press) {
+		handleMouse(button, press);
 	}
 
 	private void handleKeyboardLane(InputConstants.Key key, boolean press) {
 		Minecraft minecraft = Minecraft.getInstance();
 		ZcbConfig config = configSupplier.get();
-		LoadedClickpack clickpack = keyboardClickpackSupplier.get();
-		if (minecraft == null || minecraft.level == null || config == null || clickpack == null || !config.enabled) {
+		LoadedClickpack primaryClickpack = keyboardClickpackSupplier.get();
+		LoadedClickpack secondaryClickpack = mouseClickpackSupplier.get();
+		if (minecraft == null || minecraft.level == null || config == null || !config.enabled || (primaryClickpack == null && secondaryClickpack == null)) {
 			return;
 		}
 
@@ -82,9 +94,9 @@ public final class ClickInputService {
 		}
 
 		double classificationDt = handState.lastGlobalEventTime > 0.0D ? now - handState.lastGlobalEventTime : Double.POSITIVE_INFINITY;
-		ClickType clickType = ClickType.fromTime(press, classificationDt, config.timings);
+		ClickType clickType = ClickType.fromTime(press, classificationDt, config.timings, hardClicksEnabled(config));
 		clickType = adjustKeyboardClickType(clickType, press, otherPressedKeys);
-		ClickSample sample = resolveSample(clickpack, clickType, true);
+		ClickSample sample = resolveSample(primaryClickpack, secondaryClickpack, clickType, true, hardClicksEnabled(config));
 		if (sample == null) {
 			state.pressed = press;
 			state.lastEventTime = now;
@@ -109,8 +121,9 @@ public final class ClickInputService {
 	private void handleLane(LaneState laneState, Object inputId, boolean press, boolean keyboardLane) {
 		Minecraft minecraft = Minecraft.getInstance();
 		ZcbConfig config = configSupplier.get();
-		LoadedClickpack clickpack = keyboardLane ? keyboardClickpackSupplier.get() : mouseClickpackSupplier.get();
-		if (minecraft == null || minecraft.level == null || config == null || clickpack == null || !config.enabled) {
+		LoadedClickpack primaryClickpack = keyboardLane ? keyboardClickpackSupplier.get() : mouseClickpackSupplier.get();
+		LoadedClickpack secondaryClickpack = keyboardLane ? mouseClickpackSupplier.get() : keyboardClickpackSupplier.get();
+		if (minecraft == null || minecraft.level == null || config == null || !config.enabled || (primaryClickpack == null && secondaryClickpack == null)) {
 			return;
 		}
 
@@ -121,8 +134,8 @@ public final class ClickInputService {
 
 		double now = currentTimeSeconds();
 		double classificationDt = state.lastEventTime > 0.0D ? now - state.lastEventTime : FIRST_EVENT_DT;
-		ClickType clickType = ClickType.fromTime(press, classificationDt, config.timings);
-		ClickSample sample = resolveSample(clickpack, clickType, keyboardLane);
+		ClickType clickType = ClickType.fromTime(press, classificationDt, config.timings, hardClicksEnabled(config));
+		ClickSample sample = resolveSample(primaryClickpack, secondaryClickpack, clickType, keyboardLane, hardClicksEnabled(config));
 		if (sample == null) {
 			state.pressed = press;
 			state.lastEventTime = now;
@@ -233,18 +246,39 @@ public final class ClickInputService {
 		};
 	}
 
-	private ClickSample resolveSample(LoadedClickpack clickpack, ClickType clickType, boolean keyboardLane) {
+	private boolean hardClicksEnabled(@Nullable ZcbConfig config) {
+		return config != null && (config.hardClicksEnabled == null || config.hardClicksEnabled);
+	}
+
+	private @Nullable ClickSample resolveSample(
+		@Nullable LoadedClickpack primaryClickpack,
+		@Nullable LoadedClickpack secondaryClickpack,
+		ClickType clickType,
+		boolean keyboardLane,
+		boolean allowHardClicks
+	) {
+		ClickSample sample = resolveSampleFromPack(primaryClickpack, clickType, keyboardLane, allowHardClicks);
+		if (sample != null) {
+			return sample;
+		}
+		return resolveSampleFromPack(secondaryClickpack, clickType, keyboardLane, allowHardClicks);
+	}
+
+	private @Nullable ClickSample resolveSampleFromPack(@Nullable LoadedClickpack clickpack, ClickType clickType, boolean keyboardLane, boolean allowHardClicks) {
+		if (clickpack == null) {
+			return null;
+		}
 		if (keyboardLane) {
-			ClickSample sample = clickpack.randomKeyboardSample(clickType);
+			ClickSample sample = clickpack.randomKeyboardSample(clickType, allowHardClicks);
 			if (sample == null) {
-				sample = clickpack.randomMouseSample(clickType);
+				sample = clickpack.randomMouseSample(clickType, allowHardClicks);
 			}
 			return sample;
 		}
 
-		ClickSample sample = clickpack.randomMouseSample(clickType);
+		ClickSample sample = clickpack.randomMouseSample(clickType, allowHardClicks);
 		if (sample == null) {
-			sample = clickpack.randomKeyboardSample(clickType);
+			sample = clickpack.randomKeyboardSample(clickType, allowHardClicks);
 		}
 		return sample;
 	}
@@ -263,6 +297,17 @@ public final class ClickInputService {
 			max = swapped;
 		}
 		return ThreadLocalRandom.current().nextDouble(min, max);
+	}
+
+	private boolean isDuplicateMouseEvent(int button, boolean press) {
+		double now = currentTimeSeconds();
+		boolean duplicate = lastMouseEventButton == button
+			&& lastMouseEventPress == press
+			&& now - lastMouseEventTime <= DUPLICATE_MOUSE_EVENT_WINDOW;
+		lastMouseEventButton = button;
+		lastMouseEventPress = press;
+		lastMouseEventTime = now;
+		return duplicate;
 	}
 
 	private static final class LaneState {

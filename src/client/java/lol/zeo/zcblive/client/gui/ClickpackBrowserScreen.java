@@ -39,8 +39,6 @@ public final class ClickpackBrowserScreen extends Screen {
 	private @Nullable Button downloadButton;
 	private @Nullable Button useKeyboardButton;
 	private @Nullable Button useMouseButton;
-	private @Nullable Button inputModeButton;
-	private @Nullable Button noiseButton;
 	private boolean refreshInProgress;
 	private boolean downloadInProgress;
 	private Component statusText = Component.literal("Loading ClickpackDB...");
@@ -53,25 +51,31 @@ public final class ClickpackBrowserScreen extends Screen {
 	@Override
 	protected void init() {
 		clearWidgets();
-		int searchWidth = width - 24;
+		int searchWidth = Math.max(1, width - 24);
 		searchBox = addRenderableWidget(new EditBox(font, 12, 28, searchWidth, 18, Component.empty()));
 		searchBox.setHint(SEARCH_HINT);
 		searchBox.setResponder(ignored -> rebuildFilteredEntries());
 
+		int panelX = width / 2 + 8;
 		int contentTop = 54;
-		int contentBottom = height - 54;
-		int listWidth = Math.max(220, (width - 36) / 2);
-		clickpackList = addRenderableWidget(new ClickpackList(minecraft, listWidth, contentBottom - contentTop, contentTop, 26));
-		clickpackList.updateSizeAndPosition(listWidth, contentBottom - contentTop, contentTop);
+		int contentBottom = height - 84;
+		int listWidth = Math.max(1, panelX - 24);
+		int listHeight = Math.max(1, contentBottom - contentTop);
+		clickpackList = addRenderableWidget(new ClickpackList(minecraft, listWidth, listHeight, contentTop, 26));
+		clickpackList.updateSizeAndPosition(listWidth, listHeight, 12, contentTop);
 
-		int buttonY = height - 28;
-		refreshButton = addRenderableWidget(Button.builder(Component.literal("Refresh"), ignored -> refreshDatabase()).bounds(12, buttonY, 80, 20).build());
-		downloadButton = addRenderableWidget(Button.builder(Component.literal("Download"), ignored -> downloadSelected()).bounds(100, buttonY, 90, 20).build());
-		useKeyboardButton = addRenderableWidget(Button.builder(Component.literal("Use as Keyboard"), ignored -> activateSelectedForKeyboard()).bounds(198, buttonY, 120, 20).build());
-		useMouseButton = addRenderableWidget(Button.builder(Component.literal("Use as Mouse"), ignored -> activateSelectedForMouse()).bounds(326, buttonY, 100, 20).build());
-		inputModeButton = addRenderableWidget(Button.builder(inputModeLabel(), ignored -> cycleInputMode()).bounds(434, buttonY, 140, 20).build());
-		noiseButton = addRenderableWidget(Button.builder(noiseLabel(), ignored -> toggleNoise()).bounds(582, buttonY, 118, 20).build());
-		addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, ignored -> onClose()).bounds(width - 92, buttonY, 80, 20).build());
+		int buttonWidth = Math.max(1, Math.min(160, (width - 40) / 3));
+		int buttonGap = 8;
+		int rowWidth = buttonWidth * 3 + buttonGap * 2;
+		int buttonX = Math.max(12, (width - rowWidth) / 2);
+		int topRowY = height - 50;
+		int bottomRowY = height - 28;
+		refreshButton = addRenderableWidget(Button.builder(Component.literal("Refresh"), ignored -> refreshDatabase()).bounds(buttonX, topRowY, buttonWidth, 20).build());
+		downloadButton = addRenderableWidget(Button.builder(Component.literal("Download"), ignored -> downloadSelected()).bounds(buttonX + buttonWidth + buttonGap, topRowY, buttonWidth, 20).build());
+		useKeyboardButton = addRenderableWidget(Button.builder(Component.literal("Use as Keyboard"), ignored -> activateSelectedForKeyboard()).bounds(buttonX + (buttonWidth + buttonGap) * 2, topRowY, buttonWidth, 20).build());
+		useMouseButton = addRenderableWidget(Button.builder(Component.literal("Use as Mouse"), ignored -> activateSelectedForMouse()).bounds(buttonX, bottomRowY, buttonWidth, 20).build());
+		addRenderableWidget(Button.builder(Component.literal("Options"), ignored -> openOptions()).bounds(buttonX + buttonWidth + buttonGap, bottomRowY, buttonWidth, 20).build());
+		addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, ignored -> onClose()).bounds(buttonX + (buttonWidth + buttonGap) * 2, bottomRowY, buttonWidth, 20).build());
 
 		setInitialFocus(searchBox);
 		loadSnapshot(controller.cachedSnapshot());
@@ -96,13 +100,13 @@ public final class ClickpackBrowserScreen extends Screen {
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float a) {
 		int panelX = width / 2 + 8;
 		int panelY = 54;
-		int panelWidth = width - panelX - 12;
-		int panelHeight = height - panelY - 54;
+		int panelWidth = Math.max(1, width - panelX - 12);
+		int panelHeight = Math.max(1, height - panelY - 84);
 
 		graphics.drawCenteredString(font, title, width / 2, 10, 0xFFFFFFFF);
 		graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, 0x7A000000);
 		graphics.renderOutline(panelX, panelY, panelWidth, panelHeight, 0xFF4A4A4A);
-		graphics.drawString(font, statusText, 12, height - 42, 0xFFD0D0D0, false);
+		graphics.drawString(font, statusText, 12, height - 72, 0xFFD0D0D0, false);
 
 		super.render(graphics, mouseX, mouseY, a);
 		renderDetailPanel(graphics, panelX, panelY, panelWidth, panelHeight);
@@ -171,7 +175,7 @@ public final class ClickpackBrowserScreen extends Screen {
 	}
 
 	private void downloadSelected() {
-		if (selectedEntry == null || refreshInProgress || downloadInProgress) {
+		if (selectedEntry == null || refreshInProgress || downloadInProgress || controller.isInstalled(selectedEntry.name())) {
 			return;
 		}
 		downloadInProgress = true;
@@ -217,24 +221,10 @@ public final class ClickpackBrowserScreen extends Screen {
 		updateButtons();
 	}
 
-	private void cycleInputMode() {
-		try {
-			controller.cycleInputMode();
-			statusText = Component.literal("Input mode: " + controller.inputMode().label());
-		} catch (Exception exception) {
-			statusText = Component.literal("Failed to change input mode: " + rootMessage(exception));
+	private void openOptions() {
+		if (minecraft != null) {
+			minecraft.setScreen(new ClickpackOptionsScreen(this));
 		}
-		updateButtons();
-	}
-
-	private void toggleNoise() {
-		try {
-			controller.togglePlayNoise();
-			statusText = Component.literal(controller.playNoiseEnabled() ? "Noise enabled." : "Noise disabled.");
-		} catch (Exception exception) {
-			statusText = Component.literal("Failed to change noise: " + rootMessage(exception));
-		}
-		updateButtons();
 	}
 
 	private void loadSnapshot(ClickpackDbClient.DatabaseSnapshot snapshot) {
@@ -269,7 +259,7 @@ public final class ClickpackBrowserScreen extends Screen {
 			refreshButton.active = !refreshInProgress && !downloadInProgress;
 		}
 		if (downloadButton != null) {
-			downloadButton.active = selectedEntry != null && !refreshInProgress && !downloadInProgress;
+			downloadButton.active = selectedEntry != null && !installed && !refreshInProgress && !downloadInProgress;
 		}
 		if (useKeyboardButton != null) {
 			useKeyboardButton.active = selectedEntry != null && installed;
@@ -277,22 +267,6 @@ public final class ClickpackBrowserScreen extends Screen {
 		if (useMouseButton != null) {
 			useMouseButton.active = selectedEntry != null && installed;
 		}
-		if (inputModeButton != null) {
-			inputModeButton.setMessage(inputModeLabel());
-			inputModeButton.active = true;
-		}
-		if (noiseButton != null) {
-			noiseButton.setMessage(noiseLabel());
-			noiseButton.active = true;
-		}
-	}
-
-	private Component inputModeLabel() {
-		return Component.literal("Input: " + controller.inputMode().label());
-	}
-
-	private Component noiseLabel() {
-		return Component.literal("Noise: " + (controller.playNoiseEnabled() ? "On" : "Off"));
 	}
 
 	private String formatSize(long bytes) {

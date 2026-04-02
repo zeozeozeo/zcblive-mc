@@ -1,5 +1,9 @@
 package lol.zeo.zcblive.client;
 
+import com.mojang.serialization.Codec;
+import java.util.Arrays;
+import java.util.Locale;
+
 public final class ZcbConfig {
 	public String activeClickpack = "";
 	public String activeKeyboardClickpack = "";
@@ -12,6 +16,7 @@ public final class ZcbConfig {
 	public Timings timings = new Timings();
 	public VolumeSettings volumeSettings = new VolumeSettings();
 	public boolean playNoise = false;
+	public Boolean hardClicksEnabled = Boolean.TRUE;
 
 	public ZcbConfig normalize() {
 		if (activeClickpack == null) {
@@ -41,6 +46,9 @@ public final class ZcbConfig {
 		if (volumeSettings == null) {
 			volumeSettings = new VolumeSettings();
 		}
+		if (hardClicksEnabled == null) {
+			hardClicksEnabled = Boolean.TRUE;
+		}
 		if (pitch.from > pitch.to) {
 			double swapped = pitch.from;
 			pitch.from = pitch.to;
@@ -49,6 +57,11 @@ public final class ZcbConfig {
 		timings.hard = Math.max(timings.hard, 0.0D);
 		timings.regular = Math.max(timings.regular, 0.0D);
 		timings.soft = Math.max(timings.soft, 0.0D);
+		double[] sortedTimings = {timings.soft, timings.regular, timings.hard};
+		Arrays.sort(sortedTimings);
+		timings.soft = sortedTimings[0];
+		timings.regular = sortedTimings[1];
+		timings.hard = sortedTimings[2];
 		volumeSettings.spamTime = Math.max(volumeSettings.spamTime, 0.0D);
 		volumeSettings.maxSpamVolOffset = Math.max(volumeSettings.maxSpamVolOffset, 0.0D);
 		volumeSettings.globalVolume = Math.max(volumeSettings.globalVolume, 0.0D);
@@ -65,6 +78,8 @@ public final class ZcbConfig {
 		MOUSE_ONLY("Mouse Only"),
 		BOTH("Both");
 
+		public static final Codec<InputMode> CODEC = Codec.STRING.xmap(InputMode::fromSerializedName, InputMode::serializedName);
+
 		private final String label;
 
 		InputMode(String label) {
@@ -80,6 +95,19 @@ public final class ZcbConfig {
 				case KEYBOARD_ONLY -> MOUSE_ONLY;
 				case MOUSE_ONLY -> BOTH;
 				case BOTH -> KEYBOARD_ONLY;
+			};
+		}
+
+		public String serializedName() {
+			return name().toLowerCase(Locale.ROOT);
+		}
+
+		public static InputMode fromSerializedName(String serializedName) {
+			return switch (serializedName.toLowerCase(Locale.ROOT)) {
+				case "keyboard_only" -> KEYBOARD_ONLY;
+				case "mouse_only" -> MOUSE_ONLY;
+				case "both" -> BOTH;
+				default -> BOTH;
 			};
 		}
 	}
