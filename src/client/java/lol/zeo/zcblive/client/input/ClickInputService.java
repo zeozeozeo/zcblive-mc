@@ -54,7 +54,7 @@ public final class ClickInputService {
 	}
 
 	public void handleMouse(int button, boolean press) {
-		if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT && button != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+		if (!isSupportedMouseButton(button)) {
 			return;
 		}
 		ZcbConfig config = configSupplier.get();
@@ -62,6 +62,10 @@ public final class ClickInputService {
 			return;
 		}
 		if (isDuplicateMouseEvent(button, press)) {
+			return;
+		}
+		if (isSideMouseButton(button)) {
+			handleLane(mouse, button, press, false, ClickType.MICRO_RELEASE);
 			return;
 		}
 		handleLane(mouse, button, press, false);
@@ -119,6 +123,10 @@ public final class ClickInputService {
 	}
 
 	private void handleLane(LaneState laneState, Object inputId, boolean press, boolean keyboardLane) {
+		handleLane(laneState, inputId, press, keyboardLane, null);
+	}
+
+	private void handleLane(LaneState laneState, Object inputId, boolean press, boolean keyboardLane, @Nullable ClickType forcedClickType) {
 		Minecraft minecraft = Minecraft.getInstance();
 		ZcbConfig config = configSupplier.get();
 		LoadedClickpack primaryClickpack = keyboardLane ? keyboardClickpackSupplier.get() : mouseClickpackSupplier.get();
@@ -133,8 +141,13 @@ public final class ClickInputService {
 		}
 
 		double now = currentTimeSeconds();
-		double classificationDt = state.lastEventTime > 0.0D ? now - state.lastEventTime : FIRST_EVENT_DT;
-		ClickType clickType = ClickType.fromTime(press, classificationDt, config.timings, hardClicksEnabled(config));
+		ClickType clickType;
+		if (forcedClickType != null) {
+			clickType = forcedClickType;
+		} else {
+			double classificationDt = state.lastEventTime > 0.0D ? now - state.lastEventTime : FIRST_EVENT_DT;
+			clickType = ClickType.fromTime(press, classificationDt, config.timings, hardClicksEnabled(config));
+		}
 		ClickSample sample = resolveSample(primaryClickpack, secondaryClickpack, clickType, keyboardLane, hardClicksEnabled(config));
 		if (sample == null) {
 			state.pressed = press;
@@ -158,6 +171,17 @@ public final class ClickInputService {
 		state.pressed = press;
 		state.lastEventTime = now;
 		laneState.lastGlobalEventTime = now;
+	}
+
+	private boolean isSupportedMouseButton(int button) {
+		return button == GLFW.GLFW_MOUSE_BUTTON_LEFT
+			|| button == GLFW.GLFW_MOUSE_BUTTON_RIGHT
+			|| button == GLFW.GLFW_MOUSE_BUTTON_4
+			|| button == GLFW.GLFW_MOUSE_BUTTON_5;
+	}
+
+	private boolean isSideMouseButton(int button) {
+		return button == GLFW.GLFW_MOUSE_BUTTON_4 || button == GLFW.GLFW_MOUSE_BUTTON_5;
 	}
 
 	private double calculateVolume(ZcbConfig config, boolean press, double spamDt) {
