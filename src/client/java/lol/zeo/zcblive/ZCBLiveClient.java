@@ -5,6 +5,7 @@ import java.util.List;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -32,7 +33,10 @@ public class ZCBLiveClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		CONTROLLER.initialize();
 		ClientTickEvents.END_CLIENT_TICK.register(client -> CONTROLLER.tick());
-		ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> addMenuButton(screen));
+		ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+			addMenuButton(screen);
+			registerScreenInputHooks(screen);
+		});
 	}
 
 	private static void addMenuButton(Screen screen) {
@@ -87,6 +91,21 @@ public class ZCBLiveClient implements ClientModInitializer {
 		return Button.builder(CLICKPACKS_TEXT, ignored -> Screens.getMinecraft(screen).setScreen(new ClickpackBrowserScreen(screen)))
 			.bounds(x, y, width, MENU_BUTTON_HEIGHT)
 			.build();
+	}
+
+	private static void registerScreenInputHooks(Screen screen) {
+		ScreenMouseEvents.afterMouseClick(screen).register((currentScreen, context, consumed) -> {
+			if (consumed) {
+				CONTROLLER.handleScreenMouseEvent(context.button(), true);
+			}
+			return consumed;
+		});
+		ScreenMouseEvents.afterMouseRelease(screen).register((currentScreen, context, consumed) -> {
+			if (consumed) {
+				CONTROLLER.handleScreenMouseEvent(context.button(), false);
+			}
+			return consumed;
+		});
 	}
 
 	private static int clamp(int value, int min, int max) {
