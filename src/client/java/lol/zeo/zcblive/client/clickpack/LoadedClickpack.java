@@ -45,11 +45,19 @@ public final class LoadedClickpack implements AutoCloseable {
 	}
 
 	public @Nullable ClickSample randomKeyboardSample(ClickType type) {
-		return keyboardClicks == null ? null : keyboardClicks.randomSample(type);
+		return randomKeyboardSample(type, true);
+	}
+
+	public @Nullable ClickSample randomKeyboardSample(ClickType type, boolean allowHardClicks) {
+		return keyboardClicks == null ? null : keyboardClicks.randomSample(type, allowHardClicks);
 	}
 
 	public @Nullable ClickSample randomMouseSample(ClickType type) {
-		return mouseClicks == null ? null : mouseClicks.randomSample(type);
+		return randomMouseSample(type, true);
+	}
+
+	public @Nullable ClickSample randomMouseSample(ClickType type, boolean allowHardClicks) {
+		return mouseClicks == null ? null : mouseClicks.randomSample(type, allowHardClicks);
 	}
 
 	public @Nullable ClickSample noiseSample() {

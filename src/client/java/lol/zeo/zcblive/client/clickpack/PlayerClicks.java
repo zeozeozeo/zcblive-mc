@@ -33,7 +33,14 @@ public final class PlayerClicks {
 	}
 
 	public @Nullable ClickSample randomSample(ClickType preferredType) {
+		return randomSample(preferredType, true);
+	}
+
+	public @Nullable ClickSample randomSample(ClickType preferredType, boolean allowHardClicks) {
 		for (ClickType type : preferredType.preferred()) {
+			if (!allowHardClicks && (type == ClickType.HARD_CLICK || type == ClickType.HARD_RELEASE)) {
+				continue;
+			}
 			List<ClickSample> bucket = samples.get(type);
 			if (bucket == null || bucket.isEmpty()) {
 				continue;

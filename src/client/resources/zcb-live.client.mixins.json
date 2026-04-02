@@ -5,7 +5,6 @@
 	"client": [
 		"KeyboardHandlerMixin",
 		"MouseHandlerMixin",
-		"SoundOptionsScreenMixin",
 		"SoundEngineAccessor",
 		"SoundManagerAccessor"
 	],
