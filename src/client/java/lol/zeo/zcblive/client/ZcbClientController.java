@@ -2,6 +2,9 @@ package lol.zeo.zcblive.client;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
@@ -99,6 +102,10 @@ public final class ZcbClientController {
 		return isKeyboardActivePack(packName) || isMouseActivePack(packName);
 	}
 
+	public synchronized boolean isFeaturedPack(String packName) {
+		return config.featuredClickpacks.contains(normalizedName(packName));
+	}
+
 	public synchronized ZcbConfig.InputMode inputMode() {
 		return config.inputMode;
 	}
@@ -108,7 +115,7 @@ public final class ZcbClientController {
 	}
 
 	public synchronized double clickVolume() {
-		return config.clickVolume;
+		return config.keyboard.settings.clickVolume;
 	}
 
 	public synchronized boolean playNoiseEnabled() {
@@ -121,7 +128,8 @@ public final class ZcbClientController {
 	}
 
 	public synchronized void setClickVolume(double clickVolume) throws IOException {
-		config.clickVolume = Math.max(0.0D, Math.min(clickVolume, 5.0D));
+		config.keyboard.setClickVolume(clickVolume);
+		config.mouse.clickVolume = Math.max(0.0D, Math.min(clickVolume, 5.0D));
 		saveConfig();
 	}
 
@@ -138,6 +146,15 @@ public final class ZcbClientController {
 
 	public synchronized void togglePlayNoise() throws IOException {
 		config.playNoise = !config.playNoise;
+		saveConfig();
+	}
+
+	public synchronized void resetLaneSettingsToDefaults(boolean keyboardLane) throws IOException {
+		if (keyboardLane) {
+			config.keyboard = new ZcbConfig.KeyboardSettings();
+		} else {
+			config.mouse = new ZcbConfig.LaneSettings();
+		}
 		saveConfig();
 	}
 
@@ -191,10 +208,35 @@ public final class ZcbClientController {
 		return clickpacksDirectory;
 	}
 
+	public Path clickpackPathForName(String packName) {
+		return clickpacksDirectory.resolve(clickpackDbClient.directoryNameForPack(packName));
+	}
+
+	public synchronized void deleteInstalledClickpack(String packName) throws IOException {
+		Path directory = clickpackPathForName(packName);
+		deleteRecursively(directory);
+		reloadAssignedClickpacks();
+	}
+
+	public synchronized void toggleFeaturedPack(String packName) throws IOException {
+		String normalized = normalizedName(packName);
+		if (config.featuredClickpacks.removeIf(normalized::equals)) {
+			saveConfig();
+			return;
+		}
+		config.featuredClickpacks.add(normalized);
+		saveConfig();
+	}
+
 	public void tick() {
 		Minecraft minecraft = Minecraft.getInstance();
 		boolean allowNoise = minecraft != null && minecraft.level != null && config.enabled && config.playNoise;
-		clickAudioService.syncNoiseLoop(desiredNoiseSample(), config.clickVolume, allowNoise);
+		NoiseLoopState noiseLoop = desiredNoiseLoop();
+		if (noiseLoop == null) {
+			clickAudioService.syncNoiseLoop(null, 1.0D, allowNoise);
+		} else {
+			clickAudioService.syncNoiseLoop(noiseLoop.sample(), noiseLoop.preampGain(), allowNoise);
+		}
 	}
 
 	private synchronized void reloadAssignedClickpacks() throws IOException {
@@ -245,14 +287,14 @@ public final class ZcbClientController {
 		if (clickpack != null && clickpack != other) {
 			clickpack.close();
 		}
-	}
+	}   
 
-	private synchronized @Nullable ClickSample desiredNoiseSample() {
+	private synchronized @Nullable NoiseLoopState desiredNoiseLoop() {
 		if (activeMouseClickpack != null && activeMouseClickpack.hasNoise()) {
-			return activeMouseClickpack.noiseSample();
+			return new NoiseLoopState(activeMouseClickpack.noiseSample(), config.mouse.clickVolume);
 		}
 		if (activeKeyboardClickpack != null && activeKeyboardClickpack.hasNoise()) {
-			return activeKeyboardClickpack.noiseSample();
+			return new NoiseLoopState(activeKeyboardClickpack.noiseSample(), config.keyboard.settings.clickVolume);
 		}
 		return null;
 	}
@@ -261,9 +303,12 @@ public final class ZcbClientController {
 		Files.createDirectories(configDirectory);
 		if (Files.isRegularFile(configFile)) {
 			try (Reader reader = Files.newBufferedReader(configFile)) {
-				ZcbConfig loaded = GSON.fromJson(reader, ZcbConfig.class);
-				if (loaded != null) {
-					return loaded.normalize();
+				JsonElement element = JsonParser.parseReader(reader);
+				if (element != null && element.isJsonObject()) {
+					ZcbConfig loaded = readConfig(element.getAsJsonObject());
+					if (loaded != null) {
+						return loaded.normalize();
+					}
 				}
 			} catch (Exception exception) {
 				ZCBLive.LOGGER.warn("Failed to read {}, writing defaults", configFile, exception);
@@ -280,6 +325,85 @@ public final class ZcbClientController {
 		try (Writer writer = Files.newBufferedWriter(configFile)) {
 			GSON.toJson(config.normalize(), writer);
 		}
+	}
+
+	private ZcbConfig readConfig(JsonObject root) {
+		ZcbConfig loaded = new ZcbConfig();
+		loaded.activeClickpack = getString(root, "activeClickpack", loaded.activeClickpack);
+		loaded.activeKeyboardClickpack = getString(root, "activeKeyboardClickpack", loaded.activeKeyboardClickpack);
+		loaded.activeMouseClickpack = getString(root, "activeMouseClickpack", loaded.activeMouseClickpack);
+		loaded.enabled = getBoolean(root, "enabled", loaded.enabled);
+		loaded.playNoise = getBoolean(root, "playNoise", loaded.playNoise);
+		String inputMode = getString(root, "inputMode", null);
+		if (inputMode != null) {
+			loaded.inputMode = ZcbConfig.InputMode.fromSerializedName(inputMode);
+		}
+
+		JsonObject keyboardObject = getObject(root, "keyboard");
+		JsonObject mouseObject = getObject(root, "mouse");
+		if (keyboardObject != null) {
+			loaded.keyboard = readKeyboardSettings(keyboardObject);
+		}
+		if (mouseObject != null) {
+			loaded.mouse = GSON.fromJson(mouseObject, ZcbConfig.LaneSettings.class);
+		}
+
+		if (keyboardObject == null && hasLegacyLaneFields(root)) {
+			loaded.keyboard.settings = readLegacyLaneSettings(root);
+		}
+		if (keyboardObject != null && loaded.keyboard.settings == null) {
+			loaded.keyboard.settings = readKeyboardSharedLane(keyboardObject);
+		}
+		if (mouseObject == null && hasLegacyLaneFields(root)) {
+			loaded.mouse = readLegacyLaneSettings(root);
+		}
+		return loaded;
+	}
+
+	private ZcbConfig.KeyboardSettings readKeyboardSettings(JsonObject root) {
+		ZcbConfig.KeyboardSettings settings = GSON.fromJson(root, ZcbConfig.KeyboardSettings.class);
+		if (settings == null) {
+			settings = new ZcbConfig.KeyboardSettings();
+		}
+		if (settings.settings == null) {
+			settings.settings = readKeyboardSharedLane(root);
+		}
+		return settings;
+	}
+
+	private ZcbConfig.LaneSettings readKeyboardSharedLane(JsonObject root) {
+		JsonObject settingsObject = getObject(root, "settings");
+		if (settingsObject != null) {
+			ZcbConfig.LaneSettings settings = GSON.fromJson(settingsObject, ZcbConfig.LaneSettings.class);
+			if (settings != null) {
+				return settings;
+			}
+		}
+		if (hasLegacyLaneFields(root)) {
+			return readLegacyLaneSettings(root);
+		}
+		JsonObject row1 = getObject(root, "row1");
+		if (row1 != null) {
+			ZcbConfig.LaneSettings settings = GSON.fromJson(row1, ZcbConfig.LaneSettings.class);
+			if (settings != null) {
+				return settings;
+			}
+		}
+		JsonObject leftHand = getObject(root, "leftHand");
+		if (leftHand != null) {
+			ZcbConfig.LaneSettings settings = GSON.fromJson(leftHand, ZcbConfig.LaneSettings.class);
+			if (settings != null) {
+				return settings;
+			}
+		}
+		JsonObject rightHand = getObject(root, "rightHand");
+		if (rightHand != null) {
+			ZcbConfig.LaneSettings settings = GSON.fromJson(rightHand, ZcbConfig.LaneSettings.class);
+			if (settings != null) {
+				return settings;
+			}
+		}
+		return new ZcbConfig.LaneSettings();
 	}
 
 	private ClickpackDbClient.DatabaseSnapshot loadCachedSnapshot() throws IOException {
@@ -341,15 +465,79 @@ public final class ZcbClientController {
 	}
 
 	private int browserPriority(ClickpackDbEntry entry) {
-		if (isKeyboardActivePack(entry.name()) && isMouseActivePack(entry.name())) {
+		if (isFeaturedPack(entry.name())) {
 			return 0;
 		}
-		if (isAnyActivePack(entry.name())) {
+		if (isKeyboardActivePack(entry.name()) && isMouseActivePack(entry.name())) {
 			return 1;
 		}
-		if (isInstalled(entry.name())) {
+		if (isAnyActivePack(entry.name())) {
 			return 2;
 		}
-		return 3;
+		if (isInstalled(entry.name())) {
+			return 3;
+		}
+		return 4;
+	}
+
+	private ZcbConfig.LaneSettings readLegacyLaneSettings(JsonObject root) {
+		ZcbConfig.LaneSettings settings = new ZcbConfig.LaneSettings();
+		settings.clickVolume = getDouble(root, "clickVolume", settings.clickVolume);
+		settings.pitchEnabled = getBoolean(root, "pitchEnabled", settings.pitchEnabled);
+		JsonObject pitchObject = getObject(root, "pitch");
+		if (pitchObject != null) {
+			settings.pitch = GSON.fromJson(pitchObject, ZcbConfig.PitchSettings.class);
+		}
+		JsonObject timingsObject = getObject(root, "timings");
+		if (timingsObject != null) {
+			settings.timings = GSON.fromJson(timingsObject, ZcbConfig.Timings.class);
+		}
+		JsonObject volumeSettingsObject = getObject(root, "volumeSettings");
+		if (volumeSettingsObject != null) {
+			settings.volumeSettings = GSON.fromJson(volumeSettingsObject, ZcbConfig.VolumeSettings.class);
+		}
+		if (root.has("hardClicksEnabled")) {
+			settings.hardClicksEnabled = root.get("hardClicksEnabled").isJsonNull() ? null : root.get("hardClicksEnabled").getAsBoolean();
+		}
+		return settings;
+	}
+
+	private boolean hasLegacyLaneFields(JsonObject root) {
+		return root.has("clickVolume")
+			|| root.has("pitchEnabled")
+			|| root.has("pitch")
+			|| root.has("timings")
+			|| root.has("volumeSettings")
+			|| root.has("hardClicksEnabled");
+	}
+
+	private @Nullable JsonObject getObject(JsonObject root, String key) {
+		return root.has(key) && root.get(key).isJsonObject() ? root.getAsJsonObject(key) : null;
+	}
+
+	private String getString(JsonObject root, String key, @Nullable String defaultValue) {
+		return root.has(key) && !root.get(key).isJsonNull() ? root.get(key).getAsString() : defaultValue;
+	}
+
+	private boolean getBoolean(JsonObject root, String key, boolean defaultValue) {
+		return root.has(key) && !root.get(key).isJsonNull() ? root.get(key).getAsBoolean() : defaultValue;
+	}
+
+	private double getDouble(JsonObject root, String key, double defaultValue) {
+		return root.has(key) && !root.get(key).isJsonNull() ? root.get(key).getAsDouble() : defaultValue;
+	}
+
+	private void deleteRecursively(Path path) throws IOException {
+		if (path == null || !Files.exists(path)) {
+			return;
+		}
+		try (var stream = Files.walk(path)) {
+			for (Path child : stream.sorted(Comparator.reverseOrder()).toList()) {
+				Files.deleteIfExists(child);
+			}
+		}
+	}
+
+	private record NoiseLoopState(ClickSample sample, double preampGain) {
 	}
 }

@@ -2,11 +2,15 @@ package lol.zeo.zcblive;
 
 import java.util.Comparator;
 import java.util.List;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.resources.Identifier;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.PauseScreen;
@@ -23,6 +27,19 @@ public class ZCBLiveClient implements ClientModInitializer {
 	private static final int CORNER_BUTTON_WIDTH = 120;
 	private static final int SCREEN_MARGIN = 12;
 	private static final Component CLICKPACKS_TEXT = Component.literal("Clickpacks");
+	private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(ZCBLive.MOD_ID, "controls"));
+	private static final KeyMapping TOGGLE_CLICKBOT = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+		"key.zcb-live.toggle_clickbot",
+		InputConstants.UNKNOWN.getType(),
+		InputConstants.UNKNOWN.getValue(),
+		CATEGORY
+	));
+	private static final KeyMapping CHANGE_INPUT_MODE = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+		"key.zcb-live.change_input_mode",
+		InputConstants.UNKNOWN.getType(),
+		InputConstants.UNKNOWN.getValue(),
+		CATEGORY
+	));
 	private static final ZcbClientController CONTROLLER = new ZcbClientController();
 
 	public static ZcbClientController controller() {
@@ -32,7 +49,15 @@ public class ZCBLiveClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		CONTROLLER.initialize();
-		ClientTickEvents.END_CLIENT_TICK.register(client -> CONTROLLER.tick());
+		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			CONTROLLER.tick();
+			while (TOGGLE_CLICKBOT.consumeClick()) {
+				toggleClickbot();
+			}
+			while (CHANGE_INPUT_MODE.consumeClick()) {
+				changeInputMode();
+			}
+		});
 		ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
 			addMenuButton(screen);
 			registerScreenInputHooks(screen);
@@ -106,6 +131,22 @@ public class ZCBLiveClient implements ClientModInitializer {
 			}
 			return consumed;
 		});
+	}
+
+	private static void toggleClickbot() {
+		try {
+			CONTROLLER.updateConfig(current -> current.enabled = !current.enabled);
+		} catch (Exception exception) {
+			ZCBLive.LOGGER.warn("Failed to toggle clickbot", exception);
+		}
+	}
+
+	private static void changeInputMode() {
+		try {
+			CONTROLLER.cycleInputMode();
+		} catch (Exception exception) {
+			ZCBLive.LOGGER.warn("Failed to change input mode", exception);
+		}
 	}
 
 	private static int clamp(int value, int min, int max) {

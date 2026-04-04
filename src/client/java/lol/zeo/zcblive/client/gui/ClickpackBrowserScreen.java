@@ -6,15 +6,19 @@ import java.util.Locale;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.nio.file.Path;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.ObjectSelectionList;
+import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.util.Util;
 import net.minecraft.util.FormattedCharSequence;
 import org.jspecify.annotations.Nullable;
 
@@ -26,6 +30,9 @@ import lol.zeo.zcblive.client.db.ClickpackDbEntry;
 public final class ClickpackBrowserScreen extends Screen {
 	private static final Component TITLE = Component.literal("ClickpackDB");
 	private static final Component SEARCH_HINT = Component.literal("Search clickpacks");
+	private static final Component DELETE_CONFIRM_TITLE = Component.literal("Delete clickpack?");
+	private static final Component DELETE_CONFIRM_YES = Component.literal("Delete");
+	private static final Component DELETE_CONFIRM_NO = CommonComponents.GUI_CANCEL;
 	private static boolean initialRefreshAttempted;
 
 	private final Screen parent;
@@ -38,6 +45,9 @@ public final class ClickpackBrowserScreen extends Screen {
 	private @Nullable ClickpackList clickpackList;
 	private @Nullable Button refreshButton;
 	private @Nullable Button downloadButton;
+	private @Nullable Button deleteButton;
+	private @Nullable Button openFolderButton;
+	private @Nullable Button featureButton;
 	private @Nullable Button useKeyboardButton;
 	private @Nullable Button useMouseButton;
 	private boolean refreshInProgress;
@@ -60,23 +70,27 @@ public final class ClickpackBrowserScreen extends Screen {
 		int panelX = width / 2 + 8;
 		int contentTop = 54;
 		int contentBottom = height - 84;
+		int panelWidth = Math.max(1, width - panelX - 12);
 		int listWidth = Math.max(1, panelX - 24);
 		int listHeight = Math.max(1, contentBottom - contentTop);
 		clickpackList = addRenderableWidget(new ClickpackList(minecraft, listWidth, listHeight, contentTop, 26));
 		clickpackList.updateSizeAndPosition(listWidth, listHeight, 12, contentTop);
 
-		int buttonWidth = Math.max(1, Math.min(160, (width - 40) / 3));
+		int buttonWidth = Math.max(1, Math.min(150, (width - 48) / 4));
 		int buttonGap = 8;
-		int rowWidth = buttonWidth * 3 + buttonGap * 2;
+		int rowWidth = buttonWidth * 4 + buttonGap * 3;
 		int buttonX = Math.max(12, (width - rowWidth) / 2);
 		int topRowY = height - 50;
 		int bottomRowY = height - 28;
 		refreshButton = addRenderableWidget(Button.builder(Component.literal("Refresh"), ignored -> refreshDatabase()).bounds(buttonX, topRowY, buttonWidth, 20).build());
 		downloadButton = addRenderableWidget(Button.builder(Component.literal("Download"), ignored -> downloadSelected()).bounds(buttonX + buttonWidth + buttonGap, topRowY, buttonWidth, 20).build());
-		useKeyboardButton = addRenderableWidget(Button.builder(Component.literal("Use as Keyboard"), ignored -> activateSelectedForKeyboard()).bounds(buttonX + (buttonWidth + buttonGap) * 2, topRowY, buttonWidth, 20).build());
-		useMouseButton = addRenderableWidget(Button.builder(Component.literal("Use as Mouse"), ignored -> activateSelectedForMouse()).bounds(buttonX, bottomRowY, buttonWidth, 20).build());
-		addRenderableWidget(Button.builder(Component.literal("Options"), ignored -> openOptions()).bounds(buttonX + buttonWidth + buttonGap, bottomRowY, buttonWidth, 20).build());
-		addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, ignored -> onClose()).bounds(buttonX + (buttonWidth + buttonGap) * 2, bottomRowY, buttonWidth, 20).build());
+		deleteButton = addRenderableWidget(Button.builder(Component.literal("Delete"), ignored -> deleteSelected()).bounds(buttonX + (buttonWidth + buttonGap) * 2, topRowY, buttonWidth, 20).build());
+		openFolderButton = addRenderableWidget(Button.builder(Component.literal("Open Folder"), ignored -> openSelectedFolder()).bounds(buttonX + (buttonWidth + buttonGap) * 3, topRowY, buttonWidth, 20).build());
+		featureButton = addRenderableWidget(Button.builder(Component.literal("Feature"), ignored -> toggleFeatureSelected()).bounds(panelX + panelWidth - 84, contentTop + 8, 72, 20).build());
+		useKeyboardButton = addRenderableWidget(Button.builder(Component.literal("Use as Keyboard"), ignored -> activateSelectedForKeyboard()).bounds(buttonX, bottomRowY, buttonWidth, 20).build());
+		useMouseButton = addRenderableWidget(Button.builder(Component.literal("Use as Mouse"), ignored -> activateSelectedForMouse()).bounds(buttonX + buttonWidth + buttonGap, bottomRowY, buttonWidth, 20).build());
+		addRenderableWidget(Button.builder(Component.literal("Options"), ignored -> openOptions()).bounds(buttonX + (buttonWidth + buttonGap) * 2, bottomRowY, buttonWidth, 20).build());
+		addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, ignored -> onClose()).bounds(buttonX + (buttonWidth + buttonGap) * 3, bottomRowY, buttonWidth, 20).build());
 
 		setInitialFocus(searchBox);
 		loadSnapshot(controller.cachedSnapshot());
@@ -149,7 +163,7 @@ public final class ClickpackBrowserScreen extends Screen {
 		}
 
 		int drawY = y + 8;
-		graphics.text(font, Component.literal(selectedEntry.name()), x + 8, drawY, 0xFFFFFFFF, false);
+		graphics.text(font, Component.literal(displayName(selectedEntry)), x + 8, drawY, 0xFFFFFFFF, false);
 		drawY += 14;
 		graphics.text(font, Component.literal("Compressed: " + formatSize(selectedEntry.size())), x + 8, drawY, 0xFFD0D0D0, false);
 		drawY += 10;
@@ -223,6 +237,65 @@ public final class ClickpackBrowserScreen extends Screen {
 		}));
 	}
 
+	private void toggleFeatureSelected() {
+		if (selectedEntry == null) {
+			return;
+		}
+		try {
+			boolean featuredBefore = controller.isFeaturedPack(selectedEntry.name());
+			controller.toggleFeaturedPack(selectedEntry.name());
+			statusText = Component.literal((featuredBefore ? "Unfeatured " : "Featured ") + selectedEntry.name() + ".");
+		} catch (Exception exception) {
+			statusText = Component.literal("Feature failed: " + rootMessage(exception));
+		}
+		rebuildFilteredEntries();
+		updateButtons();
+	}
+
+	private void deleteSelected() {
+		if (selectedEntry == null || !controller.isInstalled(selectedEntry.name()) || minecraft == null) {
+			return;
+		}
+		MutableComponent message = Component.literal("Delete " + selectedEntry.name() + " from disk?");
+		minecraft.setScreen(new ConfirmScreen(confirmed -> {
+			if (confirmed) {
+				if (minecraft != null) {
+					minecraft.setScreen(this);
+				}
+				performDeleteSelected();
+			} else if (minecraft != null) {
+				minecraft.setScreen(this);
+			}
+		}, DELETE_CONFIRM_TITLE, message, DELETE_CONFIRM_YES, DELETE_CONFIRM_NO));
+	}
+
+	private void performDeleteSelected() {
+		if (selectedEntry == null) {
+			return;
+		}
+		try {
+			controller.deleteInstalledClickpack(selectedEntry.name());
+			statusText = Component.literal("Deleted " + selectedEntry.name() + ".");
+		} catch (Exception exception) {
+			statusText = Component.literal("Delete failed: " + rootMessage(exception));
+		}
+		rebuildFilteredEntries();
+		updateButtons();
+	}
+
+	private void openSelectedFolder() {
+		if (selectedEntry == null || !controller.isInstalled(selectedEntry.name())) {
+			return;
+		}
+		try {
+			Path folder = controller.clickpackPathForName(selectedEntry.name());
+			Util.getPlatform().openPath(folder);
+			statusText = Component.literal("Opened " + selectedEntry.name() + " folder.");
+		} catch (Exception exception) {
+			statusText = Component.literal("Open folder failed: " + rootMessage(exception));
+		}
+	}
+
 	private void activateSelectedForKeyboard() {
 		if (selectedEntry == null) {
 			return;
@@ -259,8 +332,6 @@ public final class ClickpackBrowserScreen extends Screen {
 
 	private void loadSnapshot(ClickpackDbClient.DatabaseSnapshot snapshot) {
 		this.snapshot = snapshot;
-		allEntries.clear();
-		allEntries.addAll(controller.browserEntries());
 		rebuildFilteredEntries();
 	}
 
@@ -268,11 +339,17 @@ public final class ClickpackBrowserScreen extends Screen {
 		if (clickpackList == null) {
 			return;
 		}
+		String selectedName = selectedEntry == null ? null : selectedEntry.name();
+		allEntries.clear();
+		allEntries.addAll(controller.browserEntries());
 		String query = searchBox == null ? "" : searchBox.getValue().trim().toLowerCase(Locale.ROOT);
 		List<ClickpackDbEntry> filtered = allEntries.stream()
 			.filter(entry -> query.isEmpty() || entry.name().toLowerCase(Locale.ROOT).contains(query))
 			.toList();
 		clickpackList.setEntries(filtered);
+		if (selectedName != null) {
+			selectedEntry = filtered.stream().filter(entry -> entry.name().equals(selectedName)).findFirst().orElse(selectedEntry);
+		}
 		if (selectedEntry == null && !filtered.isEmpty()) {
 			selectedEntry = filtered.getFirst();
 		}
@@ -290,6 +367,17 @@ public final class ClickpackBrowserScreen extends Screen {
 		}
 		if (downloadButton != null) {
 			downloadButton.active = selectedEntry != null && !installed && !refreshInProgress && !downloadInProgress;
+		}
+		if (deleteButton != null) {
+			deleteButton.active = installed && !refreshInProgress && !downloadInProgress;
+		}
+		if (openFolderButton != null) {
+			openFolderButton.active = installed;
+		}
+		if (featureButton != null) {
+			boolean featured = selectedEntry != null && controller.isFeaturedPack(selectedEntry.name());
+			featureButton.active = selectedEntry != null && controller.isInstalled(selectedEntry.name()) && !downloadInProgress;
+			featureButton.setMessage(Component.literal(featured ? "Unfeature" : "Feature"));
 		}
 		if (useKeyboardButton != null) {
 			useKeyboardButton.active = selectedEntry != null && installed;
@@ -355,6 +443,24 @@ public final class ClickpackBrowserScreen extends Screen {
 		} catch (DateTimeParseException exception) {
 			return isoDateTime;
 		}
+	}
+
+	private String displayName(ClickpackDbEntry entry) {
+		StringBuilder builder = new StringBuilder();
+		if (controller.isKeyboardActivePack(entry.name()) && controller.isMouseActivePack(entry.name())) {
+			builder.append("[Keyboard+Mouse] ");
+		} else if (controller.isKeyboardActivePack(entry.name())) {
+			builder.append("[Keyboard] ");
+		} else if (controller.isMouseActivePack(entry.name())) {
+			builder.append("[Mouse] ");
+		} else if (controller.isInstalled(entry.name())) {
+			builder.append("[Installed] ");
+		}
+		if (controller.isFeaturedPack(entry.name())) {
+			builder.append("★ ");
+		}
+		builder.append(entry.name());
+		return builder.toString();
 	}
 
 	private final class ClickpackList extends ObjectSelectionList<ClickpackEntry> {
@@ -452,19 +558,7 @@ public final class ClickpackBrowserScreen extends Screen {
 
 		@Override
 		public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY, boolean hovered, float a) {
-			String prefix;
-			if (controller.isKeyboardActivePack(entry.name()) && controller.isMouseActivePack(entry.name())) {
-				prefix = "[Keyboard+Mouse] ";
-			} else if (controller.isKeyboardActivePack(entry.name())) {
-				prefix = "[Keyboard] ";
-			} else if (controller.isMouseActivePack(entry.name())) {
-				prefix = "[Mouse] ";
-			} else if (controller.isInstalled(entry.name())) {
-				prefix = "[Installed] ";
-			} else {
-				prefix = "";
-			}
-			graphics.text(font, Component.literal(prefix + entry.name()), getContentX(), getContentY(), 0xFFFFFFFF, false);
+			graphics.text(font, Component.literal(displayName(entry)), getContentX(), getContentY(), 0xFFFFFFFF, false);
 			graphics.text(font, Component.literal(formatSize(entry.size())), getContentX(), getContentY() + 11, 0xFFB8B8B8, false);
 		}
 

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 public final class PlayerClicks {
@@ -33,12 +34,16 @@ public final class PlayerClicks {
 	}
 
 	public @Nullable ClickSample randomSample(ClickType preferredType) {
-		return randomSample(preferredType, true);
+		return randomSample(preferredType, type -> true);
 	}
 
 	public @Nullable ClickSample randomSample(ClickType preferredType, boolean allowHardClicks) {
+		return randomSample(preferredType, type -> allowHardClicks || (type != ClickType.HARD_CLICK && type != ClickType.HARD_RELEASE));
+	}
+
+	public @Nullable ClickSample randomSample(ClickType preferredType, Predicate<ClickType> allowedType) {
 		for (ClickType type : preferredType.preferred()) {
-			if (!allowHardClicks && (type == ClickType.HARD_CLICK || type == ClickType.HARD_RELEASE)) {
+			if (!allowedType.test(type)) {
 				continue;
 			}
 			List<ClickSample> bucket = samples.get(type);

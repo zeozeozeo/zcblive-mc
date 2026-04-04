@@ -19,6 +19,9 @@
 		],
 		"client": [
 			"lol.zeo.zcblive.ZCBLiveClient"
+		],
+		"modmenu": [
+			"lol.zeo.zcblive.client.ZCBLiveModMenu"
 		]
 	},
 	"mixins": [
