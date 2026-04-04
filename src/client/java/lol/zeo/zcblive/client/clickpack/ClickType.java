@@ -13,11 +13,8 @@ public enum ClickType {
 	MICRO_RELEASE,
 	NONE;
 
-	public static ClickType fromTime(boolean push, double time, ZcbConfig.Timings timings, boolean allowHardClicks) {
+	public static ClickType fromTime(boolean push, double time, ZcbConfig.Timings timings) {
 		if (time > timings.hard) {
-			if (!allowHardClicks) {
-				return push ? CLICK : RELEASE;
-			}
 			return push ? HARD_CLICK : HARD_RELEASE;
 		}
 		if (time > timings.regular) {
@@ -27,6 +24,13 @@ public enum ClickType {
 			return push ? SOFT_CLICK : SOFT_RELEASE;
 		}
 		return push ? MICRO_CLICK : MICRO_RELEASE;
+	}
+
+	public static ClickType fromTime(boolean push, double time, ZcbConfig.Timings timings, boolean allowHardClicks) {
+		if (!allowHardClicks && time > timings.hard) {
+			return push ? CLICK : RELEASE;
+		}
+		return fromTime(push, time, timings);
 	}
 
 	public ClickType[] preferred() {

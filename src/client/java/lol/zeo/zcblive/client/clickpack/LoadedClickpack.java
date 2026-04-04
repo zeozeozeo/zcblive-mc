@@ -1,6 +1,8 @@
 package lol.zeo.zcblive.client.clickpack;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import java.nio.file.Path;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 public final class LoadedClickpack implements AutoCloseable {
@@ -8,6 +10,7 @@ public final class LoadedClickpack implements AutoCloseable {
 	private final Path root;
 	private final @Nullable PlayerClicks keyboardClicks;
 	private final @Nullable PlayerClicks mouseClicks;
+	private final @Nullable ClickpackOverlay overlay;
 	private final @Nullable ClickSample noise;
 
 	public LoadedClickpack(
@@ -15,12 +18,14 @@ public final class LoadedClickpack implements AutoCloseable {
 		Path root,
 		@Nullable PlayerClicks keyboardClicks,
 		@Nullable PlayerClicks mouseClicks,
+		@Nullable ClickpackOverlay overlay,
 		@Nullable ClickSample noise
 	) {
 		this.name = name;
 		this.root = root;
 		this.keyboardClicks = keyboardClicks;
 		this.mouseClicks = mouseClicks;
+		this.overlay = overlay;
 		this.noise = noise;
 	}
 
@@ -33,31 +38,47 @@ public final class LoadedClickpack implements AutoCloseable {
 	}
 
 	public boolean hasKeyboardClicks() {
-		return keyboardClicks != null && !keyboardClicks.isEmpty();
+		return (keyboardClicks != null && !keyboardClicks.isEmpty()) || (overlay != null && overlay.hasKeyboardSamples());
 	}
 
 	public boolean hasMouseClicks() {
-		return mouseClicks != null && !mouseClicks.isEmpty();
+		return (mouseClicks != null && !mouseClicks.isEmpty()) || (overlay != null && overlay.hasMouseSamples());
 	}
 
 	public boolean hasNoise() {
 		return noise != null;
 	}
 
+	public @Nullable ClickSample randomKeyboardOverlaySample(InputConstants.Key key, ClickType type, Predicate<ClickType> allowedType) {
+		return overlay == null ? null : overlay.randomKeyboardSample(key, type, allowedType);
+	}
+
+	public @Nullable ClickSample randomMouseOverlaySample(int button, ClickType type, Predicate<ClickType> allowedType) {
+		return overlay == null ? null : overlay.randomMouseSample(button, type, allowedType);
+	}
+
 	public @Nullable ClickSample randomKeyboardSample(ClickType type) {
-		return randomKeyboardSample(type, true);
+		return randomKeyboardSample(type, clickType -> true);
 	}
 
 	public @Nullable ClickSample randomKeyboardSample(ClickType type, boolean allowHardClicks) {
-		return keyboardClicks == null ? null : keyboardClicks.randomSample(type, allowHardClicks);
+		return randomKeyboardSample(type, clickType -> allowHardClicks || (clickType != ClickType.HARD_CLICK && clickType != ClickType.HARD_RELEASE));
+	}
+
+	public @Nullable ClickSample randomKeyboardSample(ClickType type, Predicate<ClickType> allowedType) {
+		return keyboardClicks == null ? null : keyboardClicks.randomSample(type, allowedType);
 	}
 
 	public @Nullable ClickSample randomMouseSample(ClickType type) {
-		return randomMouseSample(type, true);
+		return randomMouseSample(type, clickType -> true);
 	}
 
 	public @Nullable ClickSample randomMouseSample(ClickType type, boolean allowHardClicks) {
-		return mouseClicks == null ? null : mouseClicks.randomSample(type, allowHardClicks);
+		return randomMouseSample(type, clickType -> allowHardClicks || (clickType != ClickType.HARD_CLICK && clickType != ClickType.HARD_RELEASE));
+	}
+
+	public @Nullable ClickSample randomMouseSample(ClickType type, Predicate<ClickType> allowedType) {
+		return mouseClicks == null ? null : mouseClicks.randomSample(type, allowedType);
 	}
 
 	public @Nullable ClickSample noiseSample() {
@@ -71,6 +92,9 @@ public final class LoadedClickpack implements AutoCloseable {
 		}
 		if (mouseClicks != null && mouseClicks != keyboardClicks) {
 			mouseClicks.close();
+		}
+		if (overlay != null) {
+			overlay.close();
 		}
 		if (noise != null) {
 			noise.close();
