@@ -233,7 +233,7 @@ public final class ClickpackOptionsScreen extends OptionsSubScreen {
 		LinearLayout tabRow = LinearLayout.horizontal().spacing(tabGap);
 		Button keyboardTab = tabRow.addChild(Button.builder(KEYBOARD_TAB, ignored -> openTab(LaneTab.KEYBOARD)).width(tabWidth).build());
 		Button mouseTab = tabRow.addChild(Button.builder(MOUSE_TAB, ignored -> openTab(LaneTab.MOUSE)).width(tabWidth).build());
-		layout.addToHeader(tabRow, settings -> settings.alignHorizontallyCenter().paddingTop(14));
+		layout.addToHeader(tabRow, settings -> settings.alignHorizontallyCenter().paddingTop(48));
 		keyboardTab.active = selectedTab != LaneTab.KEYBOARD;
 		mouseTab.active = selectedTab != LaneTab.MOUSE;
 	}
