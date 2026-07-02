@@ -1,6 +1,7 @@
 package lol.zeo.zcblive.client.gui;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.time.Duration;
@@ -44,12 +45,16 @@ public final class ClickpackBrowserScreen extends Screen {
 	private @Nullable EditBox searchBox;
 	private @Nullable ClickpackList clickpackList;
 	private @Nullable Button refreshButton;
+	private @Nullable Button sortDropdownButton;
 	private @Nullable Button downloadButton;
 	private @Nullable Button deleteButton;
 	private @Nullable Button openFolderButton;
 	private @Nullable Button featureButton;
 	private @Nullable Button useKeyboardButton;
 	private @Nullable Button useMouseButton;
+	private final List<Button> sortOptionButtons = new ArrayList<>();
+	private SortMode sortMode = SortMode.ALPHABETIC;
+	private boolean sortDropdownOpen;
 	private boolean refreshInProgress;
 	private boolean downloadInProgress;
 	private Component statusText = Component.literal("Loading ClickpackDB...");
@@ -62,10 +67,15 @@ public final class ClickpackBrowserScreen extends Screen {
 	@Override
 	protected void init() {
 		clearWidgets();
-		int searchWidth = Math.max(1, width - 24);
+		int sortButtonWidth = 132;
+		int searchWidth = Math.max(1, width - 24 - sortButtonWidth - 8);
 		searchBox = addRenderableWidget(new EditBox(font, 12, 28, searchWidth, 18, Component.empty()));
 		searchBox.setHint(SEARCH_HINT);
 		searchBox.setResponder(ignored -> rebuildFilteredEntries());
+		sortDropdownButton = addRenderableWidget(Button.builder(sortMode.label(), ignored -> toggleSortDropdown())
+			.bounds(20 + searchWidth, 28, sortButtonWidth, 18)
+			.build());
+		addSortOptionButtons(20 + searchWidth, 46, sortButtonWidth);
 
 		int panelX = width / 2 + 8;
 		int contentTop = 54;
@@ -150,6 +160,14 @@ public final class ClickpackBrowserScreen extends Screen {
 		graphics.drawCenteredString(font, title, width / 2, 10, 0xFFFFFFFF);
 		graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, 0x7A000000);
 		graphics.renderOutline(panelX, panelY, panelWidth, panelHeight, 0xFF4A4A4A);
+		if (sortDropdownOpen && sortDropdownButton != null) {
+			int dropdownX = sortDropdownButton.getX();
+			int dropdownY = sortDropdownButton.getY() + sortDropdownButton.getHeight();
+			int dropdownWidth = sortDropdownButton.getWidth();
+			int dropdownHeight = sortOptionButtons.size() * 20;
+			graphics.fill(dropdownX, dropdownY, dropdownX + dropdownWidth, dropdownY + dropdownHeight, 0xE0101010);
+			graphics.renderOutline(dropdownX, dropdownY, dropdownWidth, dropdownHeight, 0xFF4A4A4A);
+		}
 		graphics.drawString(font, statusText, 12, height - 72, 0xFFD0D0D0, false);
 
 		super.render(graphics, mouseX, mouseY, a);
@@ -168,6 +186,8 @@ public final class ClickpackBrowserScreen extends Screen {
 		graphics.drawString(font, Component.literal("Compressed: " + formatSize(selectedEntry.size())), x + 8, drawY, 0xFFD0D0D0, false);
 		drawY += 10;
 		graphics.drawString(font, Component.literal("Uncompressed: " + formatSize(selectedEntry.uncompressedSize())), x + 8, drawY, 0xFFD0D0D0, false);
+		drawY += 10;
+		graphics.drawString(font, Component.literal("Downloads: " + formatDownloads(selectedEntry.downloadCount())), x + 8, drawY, 0xFFD0D0D0, false);
 		drawY += 10;
 		graphics.drawString(font, Component.literal("Noise: " + (selectedEntry.hasNoise() ? "yes" : "no")), x + 8, drawY, 0xFFD0D0D0, false);
 		drawY += 10;
@@ -335,6 +355,31 @@ public final class ClickpackBrowserScreen extends Screen {
 		rebuildFilteredEntries();
 	}
 
+	private void addSortOptionButtons(int x, int y, int width) {
+		sortOptionButtons.clear();
+		int optionY = y;
+		for (SortMode mode : SortMode.values()) {
+			Button button = addRenderableWidget(Button.builder(mode.label(), ignored -> setSortMode(mode))
+				.bounds(x, optionY, width, 20)
+				.build());
+			button.visible = sortDropdownOpen;
+			sortOptionButtons.add(button);
+			optionY += 20;
+		}
+	}
+
+	private void toggleSortDropdown() {
+		sortDropdownOpen = !sortDropdownOpen;
+		updateButtons();
+	}
+
+	private void setSortMode(SortMode mode) {
+		sortMode = mode;
+		sortDropdownOpen = false;
+		rebuildFilteredEntries();
+		updateButtons();
+	}
+
 	private void rebuildFilteredEntries() {
 		if (clickpackList == null) {
 			return;
@@ -345,6 +390,7 @@ public final class ClickpackBrowserScreen extends Screen {
 		String query = searchBox == null ? "" : searchBox.getValue().trim().toLowerCase(Locale.ROOT);
 		List<ClickpackDbEntry> filtered = allEntries.stream()
 			.filter(entry -> query.isEmpty() || entry.name().toLowerCase(Locale.ROOT).contains(query))
+			.sorted(sortMode.comparator())
 			.toList();
 		clickpackList.setEntries(filtered);
 		if (selectedName != null) {
@@ -364,6 +410,15 @@ public final class ClickpackBrowserScreen extends Screen {
 		boolean installed = selectedEntry != null && controller.isInstalled(selectedEntry.name());
 		if (refreshButton != null) {
 			refreshButton.active = !refreshInProgress && !downloadInProgress;
+		}
+		if (sortDropdownButton != null) {
+			sortDropdownButton.setMessage(sortMode.label());
+			sortDropdownButton.active = !refreshInProgress && !downloadInProgress;
+		}
+		for (int index = 0; index < sortOptionButtons.size(); index++) {
+			Button button = sortOptionButtons.get(index);
+			button.visible = sortDropdownOpen;
+			button.active = !refreshInProgress && !downloadInProgress && SortMode.values()[index] != sortMode;
 		}
 		if (downloadButton != null) {
 			downloadButton.active = selectedEntry != null && !installed && !refreshInProgress && !downloadInProgress;
@@ -395,6 +450,10 @@ public final class ClickpackBrowserScreen extends Screen {
 			return String.format(Locale.ROOT, "%.1f KiB", bytes / 1024.0D);
 		}
 		return String.format(Locale.ROOT, "%.2f MiB", bytes / (1024.0D * 1024.0D));
+	}
+
+	private String formatDownloads(long downloads) {
+		return String.format(Locale.ROOT, "%,d", downloads);
 	}
 
 	private String rootMessage(Throwable throwable) {
@@ -457,10 +516,47 @@ public final class ClickpackBrowserScreen extends Screen {
 			builder.append("[Installed] ");
 		}
 		if (controller.isFeaturedPack(entry.name())) {
-			builder.append("★ ");
+			builder.append("* ");
 		}
 		builder.append(entry.name());
 		return builder.toString();
+	}
+
+	private static long sortTimestamp(ClickpackDbEntry entry) {
+		if (entry.addedAt() == null || entry.addedAt().isBlank()) {
+			return Long.MIN_VALUE;
+		}
+		try {
+			return OffsetDateTime.parse(entry.addedAt()).toInstant().toEpochMilli();
+		} catch (DateTimeParseException exception) {
+			return Long.MIN_VALUE;
+		}
+	}
+
+	private enum SortMode {
+		ALPHABETIC("Sort: Alphabetic", Comparator.comparing(entry -> entry.name().toLowerCase(Locale.ROOT))),
+		BIGGER_SIZE("Sort: Bigger Size", Comparator.comparingLong(ClickpackDbEntry::size).reversed().thenComparing(entry -> entry.name().toLowerCase(Locale.ROOT))),
+		SMALLER_SIZE("Sort: Smaller Size", Comparator.comparingLong(ClickpackDbEntry::size).thenComparing(entry -> entry.name().toLowerCase(Locale.ROOT))),
+		MOST_DOWNLOADED("Sort: Most Downloaded", Comparator.comparingLong(ClickpackDbEntry::downloadCount).reversed().thenComparing(entry -> entry.name().toLowerCase(Locale.ROOT))),
+		LEAST_DOWNLOADED("Sort: Least Downloaded", Comparator.comparingLong(ClickpackDbEntry::downloadCount).thenComparing(entry -> entry.name().toLowerCase(Locale.ROOT))),
+		NEWEST_FIRST("Sort: Newest First", Comparator.<ClickpackDbEntry>comparingLong(ClickpackBrowserScreen::sortTimestamp).reversed().thenComparing(entry -> entry.name().toLowerCase(Locale.ROOT))),
+		OLDEST_FIRST("Sort: Oldest First", Comparator.<ClickpackDbEntry>comparingLong(ClickpackBrowserScreen::sortTimestamp).thenComparing(entry -> entry.name().toLowerCase(Locale.ROOT)));
+
+		private final Component label;
+		private final Comparator<ClickpackDbEntry> comparator;
+
+		SortMode(String label, Comparator<ClickpackDbEntry> comparator) {
+			this.label = Component.literal(label);
+			this.comparator = comparator;
+		}
+
+		private Component label() {
+			return label;
+		}
+
+		private Comparator<ClickpackDbEntry> comparator() {
+			return comparator;
+		}
 	}
 
 	private final class ClickpackList extends ObjectSelectionList<ClickpackEntry> {
@@ -559,6 +655,9 @@ public final class ClickpackBrowserScreen extends Screen {
 		@Override
 		public void renderContent(GuiGraphics graphics, int mouseX, int mouseY, boolean hovered, float a) {
 			graphics.drawString(font, Component.literal(displayName(entry)), getContentX(), getContentY(), 0xFFFFFFFF, false);
+			String downloads = formatDownloads(entry.downloadCount());
+			int downloadsX = getContentX() + Math.max(0, clickpackList.getRowWidth() - font.width(downloads) - 8);
+			graphics.drawString(font, Component.literal(downloads), downloadsX, getContentY(), 0xFF8F8F8F, false);
 			graphics.drawString(font, Component.literal(formatSize(entry.size())), getContentX(), getContentY() + 11, 0xFFB8B8B8, false);
 		}
 
