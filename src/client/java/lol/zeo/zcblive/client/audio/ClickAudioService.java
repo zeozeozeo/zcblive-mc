@@ -2,6 +2,7 @@ package lol.zeo.zcblive.client.audio;
 
 import com.mojang.blaze3d.audio.Library;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.sounds.ChannelAccess;
 import net.minecraft.client.sounds.SoundEngine;
@@ -15,9 +16,16 @@ import lol.zeo.zcblive.mixin.client.SoundEngineAccessor;
 import lol.zeo.zcblive.mixin.client.SoundManagerAccessor;
 
 public final class ClickAudioService {
+	private static final AtomicInteger AUDIO_CONTEXT_GENERATION = new AtomicInteger();
+	private static volatile @org.jspecify.annotations.Nullable ChannelAccess lastChannelAccess;
+
 	private ChannelAccess.@org.jspecify.annotations.Nullable ChannelHandle noiseHandle;
 	private @org.jspecify.annotations.Nullable ClickSample noiseSample;
 	private float noiseVolume = Float.NaN;
+
+	public static int audioContextGeneration() {
+		return AUDIO_CONTEXT_GENERATION.get();
+	}
 
 	public boolean play(ClickSample sample, double volume, double pitch, double preampGain) {
 		Minecraft minecraft = Minecraft.getInstance();
@@ -33,6 +41,7 @@ public final class ClickAudioService {
 		SoundManager soundManager = minecraft.getSoundManager();
 		SoundEngine soundEngine = ((SoundManagerAccessor) soundManager).zcblive$getSoundEngine();
 		ChannelAccess channelAccess = ((SoundEngineAccessor) soundEngine).zcblive$getChannelAccess();
+		refreshAudioContext(channelAccess);
 		CompletableFuture<ChannelAccess.ChannelHandle> future = channelAccess.createHandle(Library.Pool.STATIC);
 		ChannelAccess.ChannelHandle handle;
 		try {
@@ -120,11 +129,23 @@ public final class ClickAudioService {
 		SoundManager soundManager = minecraft.getSoundManager();
 		SoundEngine soundEngine = ((SoundManagerAccessor) soundManager).zcblive$getSoundEngine();
 		ChannelAccess channelAccess = ((SoundEngineAccessor) soundEngine).zcblive$getChannelAccess();
+		refreshAudioContext(channelAccess);
 		CompletableFuture<ChannelAccess.ChannelHandle> future = channelAccess.createHandle(Library.Pool.STATIC);
 		try {
 			return future.join();
 		} catch (RuntimeException exception) {
 			return null;
 		}
+	}
+
+	private synchronized void refreshAudioContext(ChannelAccess channelAccess) {
+		if (lastChannelAccess == channelAccess) {
+			return;
+		}
+		lastChannelAccess = channelAccess;
+		AUDIO_CONTEXT_GENERATION.incrementAndGet();
+		noiseHandle = null;
+		noiseSample = null;
+		noiseVolume = Float.NaN;
 	}
 }
