@@ -431,6 +431,7 @@ public final class ClickpackBrowserScreen extends Screen {
 		}
 		if (featureButton != null) {
 			boolean featured = selectedEntry != null && controller.isFeaturedPack(selectedEntry.name());
+			featureButton.visible = !sortDropdownOpen;
 			featureButton.active = selectedEntry != null && controller.isInstalled(selectedEntry.name()) && !downloadInProgress;
 			featureButton.setMessage(Component.literal(featured ? "Unfeature" : "Feature"));
 		}
