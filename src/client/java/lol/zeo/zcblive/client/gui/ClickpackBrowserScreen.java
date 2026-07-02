@@ -360,7 +360,7 @@ public final class ClickpackBrowserScreen extends Screen {
 		String query = searchBox == null ? "" : searchBox.getValue().trim().toLowerCase(Locale.ROOT);
 		List<ClickpackDbEntry> filtered = allEntries.stream()
 			.filter(entry -> query.isEmpty() || entry.name().toLowerCase(Locale.ROOT).contains(query))
-			.sorted(sortMode.comparator())
+			.sorted(compareEntries())
 			.toList();
 		clickpackList.setEntries(filtered);
 		if (selectedName != null) {
@@ -491,6 +491,22 @@ public final class ClickpackBrowserScreen extends Screen {
 		}
 		builder.append(entry.name());
 		return builder.toString();
+	}
+
+	private Comparator<ClickpackDbEntry> compareEntries() {
+		return Comparator
+			.<ClickpackDbEntry>comparingInt(this::sortBucket)
+			.thenComparing(sortMode.comparator());
+	}
+
+	private int sortBucket(ClickpackDbEntry entry) {
+		if (controller.isAnyActivePack(entry.name())) {
+			return 0;
+		}
+		if (controller.isInstalled(entry.name())) {
+			return 1;
+		}
+		return 2;
 	}
 
 	private static long sortTimestamp(ClickpackDbEntry entry) {
