@@ -6,6 +6,7 @@ public record ClickpackDbEntry(
 	String name,
 	long size,
 	long uncompressedSize,
+	long downloadCount,
 	boolean hasNoise,
 	String url,
 	String checksum,

@@ -19,8 +19,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.zip.ZipEntry;
@@ -45,7 +47,14 @@ public final class ClickpackDbClient {
 				if (response.statusCode() < 200 || response.statusCode() >= 300) {
 					throw new IOException("Database request failed with status " + response.statusCode());
 				}
-				return parseSnapshot(response.body());
+				String rawJson = response.body();
+				Map<String, Long> downloadCounts;
+				try {
+					downloadCounts = fetchDownloadCounts(rawJson);
+				} catch (IOException exception) {
+					downloadCounts = Map.of();
+				}
+				return parseSnapshot(rawJson, downloadCounts);
 			} catch (IOException exception) {
 				throw new UncheckedIOException(exception);
 			} catch (InterruptedException exception) {
@@ -97,7 +106,29 @@ public final class ClickpackDbClient {
 		return result.isEmpty() ? "clickpack" : result;
 	}
 
-	private DatabaseSnapshot parseSnapshot(String rawJson) {
+	private Map<String, Long> fetchDownloadCounts(String rawJson) throws IOException, InterruptedException {
+		JsonObject root = JsonParser.parseString(rawJson).getAsJsonObject();
+		String hiatus = getNullableString(root, "hiatus");
+		if (hiatus == null || hiatus.isBlank()) {
+			return Map.of();
+		}
+
+		URI downloadsUri = URI.create(stripTrailingSlash(hiatus) + "/downloads/all");
+		HttpRequest request = HttpRequest.newBuilder(downloadsUri).timeout(Duration.ofSeconds(20)).GET().build();
+		HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+		if (response.statusCode() < 200 || response.statusCode() >= 300) {
+			throw new IOException("Downloads request failed with status " + response.statusCode());
+		}
+
+		JsonObject downloads = JsonParser.parseString(response.body()).getAsJsonObject();
+		Map<String, Long> counts = new LinkedHashMap<>();
+		for (String name : downloads.keySet()) {
+			counts.put(name.toLowerCase(Locale.ROOT), getLong(downloads, name));
+		}
+		return counts;
+	}
+
+	private DatabaseSnapshot parseSnapshot(String rawJson, Map<String, Long> downloadCounts) {
 		JsonObject root = JsonParser.parseString(rawJson).getAsJsonObject();
 		JsonObject clickpacks = root.getAsJsonObject("clickpacks");
 		List<ClickpackDbEntry> entries = new ArrayList<>();
@@ -107,6 +138,7 @@ public final class ClickpackDbClient {
 				name,
 				getLong(clickpack, "size"),
 				getLong(clickpack, "uncompressed_size"),
+				downloadCounts.getOrDefault(name.toLowerCase(Locale.ROOT), 0L),
 				getBoolean(clickpack, "has_noise"),
 				getString(clickpack, "url"),
 				getString(clickpack, "checksum"),
@@ -120,6 +152,10 @@ public final class ClickpackDbClient {
 			getNullableString(root, "updated_at_iso"),
 			(int) getLong(root, "version")
 		);
+	}
+
+	private String stripTrailingSlash(String value) {
+		return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
 	}
 
 	private void downloadArchive(ClickpackDbEntry entry, Path tempZip) throws IOException {
