@@ -293,6 +293,7 @@ jobs:
       - name: create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
@@ -310,6 +311,7 @@ jobs:
           fi
 
           gh release create "${{ inputs.release_tag }}" "${jars[@]}" "${manifest}" \
+            --repo "${GH_REPO}" \
             --title "${{ needs.prepare.outputs.release_name }}" \
             --notes-file "${notes_file}"
 
