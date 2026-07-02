@@ -18,8 +18,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
@@ -49,7 +51,13 @@ public final class ClickpackDbClient {
             public DatabaseSnapshot get() {
                 try {
                     String body = readStringFromUrl(DATABASE_URL, 20_000, 20_000);
-                    return parseSnapshot(body);
+                    Map<String, Long> downloadCounts;
+                    try {
+                        downloadCounts = fetchDownloadCounts(body);
+                    } catch (IOException exception) {
+                        downloadCounts = Collections.emptyMap();
+                    }
+                    return parseSnapshot(body, downloadCounts);
                 } catch (IOException exception) {
                     throw new UncheckedIOException(exception);
                 }
@@ -120,7 +128,23 @@ public final class ClickpackDbClient {
         return result.isEmpty() ? "clickpack" : result;
     }
 
-    private DatabaseSnapshot parseSnapshot(String rawJson) throws IOException {
+    private Map<String, Long> fetchDownloadCounts(String rawJson) throws IOException {
+        JsonObject root = new JsonParser().parse(rawJson).getAsJsonObject();
+        String hiatus = getNullableString(root, "hiatus");
+        if (hiatus == null || hiatus.trim().isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        String body = readStringFromUrl(stripTrailingSlash(hiatus) + "/downloads/all", 20_000, 20_000);
+        JsonObject downloads = new JsonParser().parse(body).getAsJsonObject();
+        Map<String, Long> counts = new LinkedHashMap<String, Long>();
+        for (java.util.Map.Entry<String, JsonElement> entry : downloads.entrySet()) {
+            counts.put(entry.getKey().toLowerCase(Locale.ROOT), entry.getValue().getAsLong());
+        }
+        return counts;
+    }
+
+    private DatabaseSnapshot parseSnapshot(String rawJson, Map<String, Long> downloadCounts) throws IOException {
         JsonObject root = new JsonParser().parse(rawJson).getAsJsonObject();
         JsonObject clickpacks = root.getAsJsonObject("clickpacks");
 
@@ -133,6 +157,7 @@ public final class ClickpackDbClient {
                     name,
                     getLong(clickpack, "size"),
                     getLong(clickpack, "uncompressed_size"),
+                    downloadCounts.containsKey(name.toLowerCase(Locale.ROOT)) ? downloadCounts.get(name.toLowerCase(Locale.ROOT)).longValue() : 0L,
                     getBoolean(clickpack, "has_noise"),
                     getString(clickpack, "url"),
                     getString(clickpack, "checksum"),
@@ -154,6 +179,10 @@ public final class ClickpackDbClient {
             getNullableString(root, "updated_at_iso"),
             (int) getLong(root, "version")
         );
+    }
+
+    private String stripTrailingSlash(String value) {
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
     private void downloadArchive(ClickpackDbEntry entry, Path tempZip) throws IOException {

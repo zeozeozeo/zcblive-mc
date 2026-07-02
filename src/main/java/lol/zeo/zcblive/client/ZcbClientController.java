@@ -207,18 +207,7 @@ public final class ZcbClientController {
             }
         }
 
-        List<ClickpackDbEntry> entries = new ArrayList<ClickpackDbEntry>(merged.values());
-        Collections.sort(entries, new Comparator<ClickpackDbEntry>() {
-            @Override
-            public int compare(ClickpackDbEntry left, ClickpackDbEntry right) {
-                int priorityCompare = Integer.compare(browserPriority(left), browserPriority(right));
-                if (priorityCompare != 0) {
-                    return priorityCompare;
-                }
-                return left.name().toLowerCase(Locale.ROOT).compareTo(right.name().toLowerCase(Locale.ROOT));
-            }
-        });
-        return entries;
+        return new ArrayList<ClickpackDbEntry>(merged.values());
     }
 
     public CompletableFuture<String> downloadClickpack(ClickpackDbEntry entry) {
@@ -373,6 +362,7 @@ public final class ZcbClientController {
             installedName,
             0L,
             0L,
+            0L,
             false,
             "",
             "",
@@ -385,16 +375,4 @@ public final class ZcbClientController {
         return name.toLowerCase(Locale.ROOT);
     }
 
-    private int browserPriority(ClickpackDbEntry entry) {
-        if (isKeyboardActivePack(entry.name()) && isMouseActivePack(entry.name())) {
-            return 0;
-        }
-        if (isAnyActivePack(entry.name())) {
-            return 1;
-        }
-        if (isInstalled(entry.name())) {
-            return 2;
-        }
-        return 3;
-    }
 }

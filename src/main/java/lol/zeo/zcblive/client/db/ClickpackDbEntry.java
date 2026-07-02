@@ -4,6 +4,7 @@ public final class ClickpackDbEntry {
     private String name;
     private long size;
     private long uncompressedSize;
+    private long downloadCount;
     private boolean hasNoise;
     private String url;
     private String checksum;
@@ -12,13 +13,14 @@ public final class ClickpackDbEntry {
 
     @SuppressWarnings("unused")
     public ClickpackDbEntry() {
-        this("", 0L, 0L, false, "", "", null, null);
+        this("", 0L, 0L, 0L, false, "", "", null, null);
     }
 
     public ClickpackDbEntry(
         String name,
         long size,
         long uncompressedSize,
+        long downloadCount,
         boolean hasNoise,
         String url,
         String checksum,
@@ -28,6 +30,7 @@ public final class ClickpackDbEntry {
         this.name = name;
         this.size = size;
         this.uncompressedSize = uncompressedSize;
+        this.downloadCount = downloadCount;
         this.hasNoise = hasNoise;
         this.url = url;
         this.checksum = checksum;
@@ -45,6 +48,10 @@ public final class ClickpackDbEntry {
 
     public long uncompressedSize() {
         return uncompressedSize;
+    }
+
+    public long downloadCount() {
+        return downloadCount;
     }
 
     public boolean hasNoise() {

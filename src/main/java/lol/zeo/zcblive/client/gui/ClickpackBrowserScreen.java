@@ -5,6 +5,8 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import lol.zeo.zcblive.client.ZcbClientController;
@@ -22,7 +24,9 @@ public final class ClickpackBrowserScreen extends GuiScreen {
     private static final int BUTTON_KEYBOARD = 3;
     private static final int BUTTON_MOUSE = 4;
     private static final int BUTTON_OPTIONS = 5;
+    private static final int BUTTON_SORT = 6;
     private static final int BUTTON_BACK = 7;
+    private static final int BUTTON_SORT_BASE = 20;
 
     private static boolean initialRefreshAttempted;
 
@@ -36,10 +40,14 @@ public final class ClickpackBrowserScreen extends GuiScreen {
     private GuiTextField searchBox;
     private ClickpackList clickpackList;
     private GuiButton refreshButton;
+    private GuiButton sortDropdownButton;
     private GuiButton downloadButton;
     private GuiButton useKeyboardButton;
     private GuiButton useMouseButton;
     private GuiButton optionsButton;
+    private final List<GuiButton> sortOptionButtons = new ArrayList<GuiButton>();
+    private SortMode sortMode = SortMode.ALPHABETIC;
+    private boolean sortDropdownOpen;
     private boolean refreshInProgress;
     private boolean downloadInProgress;
     private String statusText = "Loading ClickpackDB...";
@@ -54,12 +62,16 @@ public final class ClickpackBrowserScreen extends GuiScreen {
     public void initGui() {
         Keyboard.enableRepeatEvents(true);
         this.buttonList.clear();
+        this.sortOptionButtons.clear();
 
-        int searchWidth = width - 24;
+        int sortButtonWidth = 132;
+        int searchWidth = Math.max(1, width - 24 - sortButtonWidth - 8);
         searchBox = new GuiTextField(0, fontRenderer, 12, 28, searchWidth, 18);
         searchBox.setMaxStringLength(128);
         searchBox.setCanLoseFocus(true);
         searchBox.setFocused(true);
+        sortDropdownButton = addButtonCompat(new GuiButton(BUTTON_SORT, 20 + searchWidth, 28, sortButtonWidth, 20, sortMode.label()));
+        addSortOptionButtons(20 + searchWidth, 48, sortButtonWidth);
 
         int contentTop = 54;
         int contentBottom = height - 84;
@@ -154,10 +166,17 @@ public final class ClickpackBrowserScreen extends GuiScreen {
             case BUTTON_OPTIONS:
                 openOptions();
                 return;
+            case BUTTON_SORT:
+                toggleSortDropdown();
+                return;
             case BUTTON_BACK:
                 mc.displayGuiScreen(parent);
                 return;
             default:
+                if (button.id >= BUTTON_SORT_BASE && button.id < BUTTON_SORT_BASE + SortMode.values().length) {
+                    setSortMode(SortMode.values()[button.id - BUTTON_SORT_BASE]);
+                    return;
+                }
         }
     }
 
@@ -178,6 +197,10 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         drawVerticalLine(panelX, panelY, panelY + panelHeight - 1, 0xFF4A4A4A);
         drawVerticalLine(panelX + panelWidth - 1, panelY, panelY + panelHeight - 1, 0xFF4A4A4A);
         drawString(fontRenderer, statusText, 12, height - 72, 0xFFD0D0D0);
+        if (sortDropdownOpen && !sortOptionButtons.isEmpty()) {
+            GuiButton lastButton = sortOptionButtons.get(sortOptionButtons.size() - 1);
+            drawRect(sortDropdownButton.x, sortDropdownButton.y + sortDropdownButton.height, sortDropdownButton.x + sortDropdownButton.width, lastButton.y + lastButton.height, 0xE0101010);
+        }
 
         searchBox.drawTextBox();
         if (!searchBox.isFocused() && searchBox.getText().isEmpty()) {
@@ -196,11 +219,13 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         }
 
         int drawY = y + 8;
-        drawString(fontRenderer, selectedEntry.name(), x + 8, drawY, 0xFFFFFFFF);
+        drawString(fontRenderer, displayName(selectedEntry), x + 8, drawY, 0xFFFFFFFF);
         drawY += 14;
         drawString(fontRenderer, "Compressed: " + formatSize(selectedEntry.size()), x + 8, drawY, 0xFFD0D0D0);
         drawY += 10;
         drawString(fontRenderer, "Uncompressed: " + formatSize(selectedEntry.uncompressedSize()), x + 8, drawY, 0xFFD0D0D0);
+        drawY += 10;
+        drawString(fontRenderer, "Downloads: " + formatDownloads(selectedEntry.downloadCount()), x + 8, drawY, 0xFFD0D0D0);
         drawY += 10;
         drawString(fontRenderer, "Noise: " + (selectedEntry.hasNoise() ? "yes" : "no"), x + 8, drawY, 0xFFD0D0D0);
         drawY += 10;
@@ -314,6 +339,27 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         }
     }
 
+    private void addSortOptionButtons(int x, int y, int width) {
+        for (int index = 0; index < SortMode.values().length; index++) {
+            SortMode mode = SortMode.values()[index];
+            GuiButton button = addButtonCompat(new GuiButton(BUTTON_SORT_BASE + index, x, y + index * 20, width, 20, mode.label()));
+            button.visible = sortDropdownOpen;
+            sortOptionButtons.add(button);
+        }
+    }
+
+    private void toggleSortDropdown() {
+        sortDropdownOpen = !sortDropdownOpen;
+        updateButtons();
+    }
+
+    private void setSortMode(SortMode mode) {
+        sortMode = mode;
+        sortDropdownOpen = false;
+        rebuildFilteredEntries();
+        updateButtons();
+    }
+
     private void loadSnapshot(ClickpackDbClient.DatabaseSnapshot snapshot) {
         this.snapshot = snapshot;
         allEntries.clear();
@@ -329,6 +375,7 @@ public final class ClickpackBrowserScreen extends GuiScreen {
                 filteredEntries.add(entry);
             }
         }
+        Collections.sort(filteredEntries, sortMode.comparator());
 
         if (selectedEntry == null && !filteredEntries.isEmpty()) {
             selectedEntry = filteredEntries.get(0);
@@ -345,6 +392,15 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         boolean installed = selectedEntry != null && controller.isInstalled(selectedEntry.name());
         if (refreshButton != null) {
             refreshButton.enabled = !refreshInProgress && !downloadInProgress;
+        }
+        if (sortDropdownButton != null) {
+            sortDropdownButton.enabled = !refreshInProgress && !downloadInProgress;
+            sortDropdownButton.displayString = sortMode.label();
+        }
+        for (int index = 0; index < sortOptionButtons.size(); index++) {
+            GuiButton button = sortOptionButtons.get(index);
+            button.visible = sortDropdownOpen;
+            button.enabled = !refreshInProgress && !downloadInProgress && SortMode.values()[index] != sortMode;
         }
         if (downloadButton != null) {
             downloadButton.enabled = selectedEntry != null && !installed && !refreshInProgress && !downloadInProgress;
@@ -368,6 +424,10 @@ public final class ClickpackBrowserScreen extends GuiScreen {
             return String.format(Locale.ROOT, "%.1f KiB", bytes / 1024.0D);
         }
         return String.format(Locale.ROOT, "%.2f MiB", bytes / (1024.0D * 1024.0D));
+    }
+
+    private String formatDownloads(long downloads) {
+        return String.format(Locale.ROOT, "%,d", downloads);
     }
 
     private String rootMessage(Throwable throwable) {
@@ -418,6 +478,32 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         }
     }
 
+    private String displayName(ClickpackDbEntry entry) {
+        StringBuilder builder = new StringBuilder();
+        if (controller.isKeyboardActivePack(entry.name()) && controller.isMouseActivePack(entry.name())) {
+            builder.append("[Keyboard+Mouse] ");
+        } else if (controller.isKeyboardActivePack(entry.name())) {
+            builder.append("[Keyboard] ");
+        } else if (controller.isMouseActivePack(entry.name())) {
+            builder.append("[Mouse] ");
+        } else if (controller.isInstalled(entry.name())) {
+            builder.append("[Installed] ");
+        }
+        builder.append(entry.name());
+        return builder.toString();
+    }
+
+    private static long sortTimestamp(ClickpackDbEntry entry) {
+        if (entry.addedAt() == null || entry.addedAt().trim().isEmpty()) {
+            return Long.MIN_VALUE;
+        }
+        try {
+            return OffsetDateTime.parse(entry.addedAt()).toInstant().toEpochMilli();
+        } catch (DateTimeParseException exception) {
+            return Long.MIN_VALUE;
+        }
+    }
+
     private boolean containsByName(List<ClickpackDbEntry> entries, String name) {
         for (ClickpackDbEntry entry : entries) {
             if (entry.name().equals(name)) {
@@ -436,6 +522,108 @@ public final class ClickpackBrowserScreen extends GuiScreen {
     private GuiButton addButtonCompat(GuiButton button) {
         this.buttonList.add(button);
         return button;
+    }
+
+    private enum SortMode {
+        ALPHABETIC("Sort: Alphabetic") {
+            @Override
+            Comparator<ClickpackDbEntry> comparator() {
+                return byName();
+            }
+        },
+        BIGGER_SIZE("Sort: Bigger Size") {
+            @Override
+            Comparator<ClickpackDbEntry> comparator() {
+                return new Comparator<ClickpackDbEntry>() {
+                    @Override
+                    public int compare(ClickpackDbEntry left, ClickpackDbEntry right) {
+                        int compare = Long.compare(right.size(), left.size());
+                        return compare != 0 ? compare : byName().compare(left, right);
+                    }
+                };
+            }
+        },
+        SMALLER_SIZE("Sort: Smaller Size") {
+            @Override
+            Comparator<ClickpackDbEntry> comparator() {
+                return new Comparator<ClickpackDbEntry>() {
+                    @Override
+                    public int compare(ClickpackDbEntry left, ClickpackDbEntry right) {
+                        int compare = Long.compare(left.size(), right.size());
+                        return compare != 0 ? compare : byName().compare(left, right);
+                    }
+                };
+            }
+        },
+        MOST_DOWNLOADED("Sort: Most Downloaded") {
+            @Override
+            Comparator<ClickpackDbEntry> comparator() {
+                return new Comparator<ClickpackDbEntry>() {
+                    @Override
+                    public int compare(ClickpackDbEntry left, ClickpackDbEntry right) {
+                        int compare = Long.compare(right.downloadCount(), left.downloadCount());
+                        return compare != 0 ? compare : byName().compare(left, right);
+                    }
+                };
+            }
+        },
+        LEAST_DOWNLOADED("Sort: Least Downloaded") {
+            @Override
+            Comparator<ClickpackDbEntry> comparator() {
+                return new Comparator<ClickpackDbEntry>() {
+                    @Override
+                    public int compare(ClickpackDbEntry left, ClickpackDbEntry right) {
+                        int compare = Long.compare(left.downloadCount(), right.downloadCount());
+                        return compare != 0 ? compare : byName().compare(left, right);
+                    }
+                };
+            }
+        },
+        NEWEST_FIRST("Sort: Newest First") {
+            @Override
+            Comparator<ClickpackDbEntry> comparator() {
+                return new Comparator<ClickpackDbEntry>() {
+                    @Override
+                    public int compare(ClickpackDbEntry left, ClickpackDbEntry right) {
+                        int compare = Long.compare(sortTimestamp(right), sortTimestamp(left));
+                        return compare != 0 ? compare : byName().compare(left, right);
+                    }
+                };
+            }
+        },
+        OLDEST_FIRST("Sort: Oldest First") {
+            @Override
+            Comparator<ClickpackDbEntry> comparator() {
+                return new Comparator<ClickpackDbEntry>() {
+                    @Override
+                    public int compare(ClickpackDbEntry left, ClickpackDbEntry right) {
+                        int compare = Long.compare(sortTimestamp(left), sortTimestamp(right));
+                        return compare != 0 ? compare : byName().compare(left, right);
+                    }
+                };
+            }
+        };
+
+        private final String label;
+
+        SortMode(String label) {
+            this.label = label;
+        }
+
+        String label() {
+            return label;
+        }
+
+        abstract Comparator<ClickpackDbEntry> comparator();
+
+        static Comparator<ClickpackDbEntry> byName() {
+            return new Comparator<ClickpackDbEntry>() {
+                @Override
+                public int compare(ClickpackDbEntry left, ClickpackDbEntry right) {
+                    return left.name().toLowerCase(Locale.ROOT).compareTo(right.name().toLowerCase(Locale.ROOT));
+                }
+            };
+        }
     }
 
     private final class ClickpackList extends GuiSlot {
@@ -474,19 +662,10 @@ public final class ClickpackBrowserScreen extends GuiScreen {
         @Override
         protected void drawSlot(int entryId, int x, int y, int slotHeight, int mouseX, int mouseY, float partialTicks) {
             ClickpackDbEntry entry = filteredEntries.get(entryId);
-            String prefix;
-            if (controller.isKeyboardActivePack(entry.name()) && controller.isMouseActivePack(entry.name())) {
-                prefix = "[Keyboard+Mouse] ";
-            } else if (controller.isKeyboardActivePack(entry.name())) {
-                prefix = "[Keyboard] ";
-            } else if (controller.isMouseActivePack(entry.name())) {
-                prefix = "[Mouse] ";
-            } else if (controller.isInstalled(entry.name())) {
-                prefix = "[Installed] ";
-            } else {
-                prefix = "";
-            }
-            fontRenderer.drawString(prefix + entry.name(), x + 2, y + 2, 0xFFFFFFFF);
+            fontRenderer.drawString(displayName(entry), x + 2, y + 2, 0xFFFFFFFF);
+            String downloads = formatDownloads(entry.downloadCount());
+            int downloadsX = this.right - 12 - fontRenderer.getStringWidth(downloads);
+            fontRenderer.drawString(downloads, downloadsX, y + 2, 0xFF8F8F8F);
             fontRenderer.drawString(formatSize(entry.size()), x + 2, y + 13, 0xFFB8B8B8);
         }
 
