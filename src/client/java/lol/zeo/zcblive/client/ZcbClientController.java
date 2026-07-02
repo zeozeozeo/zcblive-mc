@@ -192,12 +192,7 @@ public final class ZcbClientController {
 		for (String installedName : installedClickpackNames()) {
 			merged.computeIfAbsent(normalizedName(installedName), ignored -> offlineEntry(installedName));
 		}
-		return merged.values().stream()
-			.sorted(
-				Comparator.<ClickpackDbEntry>comparingInt(this::browserPriority)
-					.thenComparing(entry -> entry.name().toLowerCase(Locale.ROOT))
-			)
-			.toList();
+		return List.copyOf(merged.values());
 	}
 
 	public CompletableFuture<String> downloadClickpack(ClickpackDbEntry entry) {
@@ -452,6 +447,7 @@ public final class ZcbClientController {
 			installedName,
 			0L,
 			0L,
+			0L,
 			false,
 			"",
 			"",
@@ -462,22 +458,6 @@ public final class ZcbClientController {
 
 	private String normalizedName(String name) {
 		return name.toLowerCase(Locale.ROOT);
-	}
-
-	private int browserPriority(ClickpackDbEntry entry) {
-		if (isFeaturedPack(entry.name())) {
-			return 0;
-		}
-		if (isKeyboardActivePack(entry.name()) && isMouseActivePack(entry.name())) {
-			return 1;
-		}
-		if (isAnyActivePack(entry.name())) {
-			return 2;
-		}
-		if (isInstalled(entry.name())) {
-			return 3;
-		}
-		return 4;
 	}
 
 	private ZcbConfig.LaneSettings readLegacyLaneSettings(JsonObject root) {
