@@ -7,9 +7,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -81,6 +83,7 @@ public final class ClickpackDbClient {
 					deleteRecursively(finalDir);
 					Files.move(tempDir, finalDir, StandardCopyOption.ATOMIC_MOVE);
 					Files.deleteIfExists(tempZip);
+					incrementDownloadCountAsync(entry);
 					return directoryName;
 				} finally {
 					Files.deleteIfExists(tempZip);
@@ -131,6 +134,7 @@ public final class ClickpackDbClient {
 	private DatabaseSnapshot parseSnapshot(String rawJson, Map<String, Long> downloadCounts) {
 		JsonObject root = JsonParser.parseString(rawJson).getAsJsonObject();
 		JsonObject clickpacks = root.getAsJsonObject("clickpacks");
+		String hiatus = getNullableString(root, "hiatus");
 		List<ClickpackDbEntry> entries = new ArrayList<>();
 		for (String name : clickpacks.keySet()) {
 			JsonObject clickpack = clickpacks.getAsJsonObject(name);
@@ -139,6 +143,7 @@ public final class ClickpackDbClient {
 				getLong(clickpack, "size"),
 				getLong(clickpack, "uncompressed_size"),
 				downloadCounts.getOrDefault(name.toLowerCase(Locale.ROOT), 0L),
+				hiatus,
 				getBoolean(clickpack, "has_noise"),
 				getString(clickpack, "url"),
 				getString(clickpack, "checksum"),
@@ -188,6 +193,27 @@ public final class ClickpackDbClient {
 		if (!actualChecksum.equalsIgnoreCase(entry.checksum())) {
 			throw new IOException("Checksum mismatch for " + entry.name());
 		}
+	}
+
+	private void incrementDownloadCountAsync(ClickpackDbEntry entry) {
+		if (entry.hiatus() == null || entry.hiatus().isBlank()) {
+			return;
+		}
+		CompletableFuture.runAsync(() -> {
+			try {
+				HttpRequest request = HttpRequest.newBuilder(incrementUri(entry))
+					.timeout(Duration.ofSeconds(10))
+					.POST(HttpRequest.BodyPublishers.noBody())
+					.build();
+				httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+			} catch (Exception ignored) {
+				// Best-effort only.
+			}
+		});
+	}
+
+	private URI incrementUri(ClickpackDbEntry entry) {
+		return URI.create(stripTrailingSlash(entry.hiatus()) + "/inc/" + URLEncoder.encode(entry.name(), StandardCharsets.UTF_8));
 	}
 
 	private void extractArchive(Path archive, Path tempDir) throws IOException {
