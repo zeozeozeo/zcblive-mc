@@ -1,5 +1,12 @@
 name: build
-on: [pull_request, push, workflow_dispatch]
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -11,11 +18,52 @@ jobs:
       - name: validate gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
+      - name: detect java version
+        id: detect_java
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          java_version=""
+
+          if [[ -f src/main/resources/fabric.mod.json ]]; then
+            java_version="$(sed -nE 's/.*"java"[[:space:]]*:[[:space:]]*">=([0-9]+)".*/\1/p' src/main/resources/fabric.mod.json | head -n1)"
+          fi
+
+          if [[ -z "${java_version}" && -f build.gradle ]]; then
+            java_version="$(sed -nE 's/.*options\.release[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' build.gradle | tail -n1)"
+          fi
+
+          if [[ -z "${java_version}" && -f build.gradle ]]; then
+            raw_java="$(sed -nE 's/.*JavaVersion\.VERSION_([0-9_]+).*/\1/p' build.gradle | head -n1)"
+            if [[ -n "${raw_java}" ]]; then
+              if [[ "${raw_java}" == "1_8" ]]; then
+                java_version="8"
+              else
+                java_version="${raw_java//_/\.}"
+              fi
+            fi
+          fi
+
+          if [[ -z "${java_version}" && -f build.gradle ]]; then
+            raw_java="$(sed -nE "s/.*sourceCompatibility.*['\"]([0-9]+(\.[0-9]+)?)['\"].*/\1/p" build.gradle | head -n1)"
+            if [[ -n "${raw_java}" ]]; then
+              java_version="${raw_java#1.}"
+            fi
+          fi
+
+          if [[ -z "${java_version}" ]]; then
+            echo "Could not detect the required Java version from repository metadata." >&2
+            exit 1
+          fi
+
+          echo "java_version=${java_version}" >> "${GITHUB_OUTPUT}"
+
       - name: setup jdk
         uses: actions/setup-java@v4
         with:
-          java-version: ${{ github.ref_name == '1.8.9' && '8' || (github.ref_name == 'main' && '25' || '21') }}
-          distribution: 'temurin'
+          java-version: ${{ steps.detect_java.outputs.java_version }}
+          distribution: temurin
 
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
@@ -26,5 +74,5 @@ jobs:
       - name: capture build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Artifacts
+          name: artifacts-${{ github.sha }}
           path: build/libs/
