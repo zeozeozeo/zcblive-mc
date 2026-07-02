@@ -1,0 +1,384 @@
+name: release-all-branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Git tag for the GitHub release.
+        required: true
+        type: string
+      release_name:
+        description: Release title. Defaults to the tag when left empty.
+        required: false
+        default: ""
+        type: string
+      release_notes:
+        description: Release notes and Modrinth changelog.
+        required: true
+        type: string
+      branch_list:
+        description: JSON array of branches to build.
+        required: false
+        default: '["1.7.10","1.8.9","1.12.2","1.21.8","1.21.11","26.1","main"]'
+        type: string
+      publish_to_modrinth:
+        description: Upload the built primary jars to Modrinth.
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.branches.outputs.matrix }}
+      has_changes: ${{ steps.branches.outputs.has_changes }}
+      release_name: ${{ steps.release_name.outputs.value }}
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: validate branch matrix
+        id: branches
+        env:
+          BRANCH_LIST: ${{ inputs.branch_list }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest_tag="$(gh release view --json tagName --jq .tagName 2>/dev/null || true)"
+          manifest_path=""
+          if [[ -n "${latest_tag}" ]]; then
+            mkdir -p .release-manifest
+            gh release download "${latest_tag}" -p release-manifest.json -D .release-manifest 2>/dev/null || true
+            if [[ -f .release-manifest/release-manifest.json ]]; then
+              manifest_path=".release-manifest/release-manifest.json"
+            fi
+          fi
+          export MANIFEST_PATH="${manifest_path}"
+
+          python - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          import os
+          import subprocess
+
+          raw = os.environ["BRANCH_LIST"]
+          candidates = json.loads(raw)
+          if not isinstance(candidates, list) or not candidates or not all(isinstance(item, str) and item for item in candidates):
+              raise SystemExit("branch_list must be a non-empty JSON array of branch names")
+
+          manifest = {}
+          manifest_path = os.environ.get("MANIFEST_PATH", "")
+          if manifest_path:
+              with open(manifest_path, "r", encoding="utf-8") as handle:
+                  manifest = json.load(handle)
+
+          previous_heads = manifest.get("branch_heads", {})
+          changed = []
+          for branch in candidates:
+              current_sha = subprocess.check_output(
+                  ["git", "rev-parse", f"origin/{branch}"],
+                  text=True,
+              ).strip()
+              if previous_heads.get(branch) != current_sha:
+                  changed.append(branch)
+
+          print(f"matrix={json.dumps(changed)}")
+          print(f"has_changes={'true' if changed else 'false'}")
+          PY
+
+      - name: choose release name
+        id: release_name
+        shell: bash
+        run: |
+          set -euo pipefail
+          value="${{ inputs.release_name }}"
+          if [[ -z "${value}" ]]; then
+            value="${{ inputs.release_tag }}"
+          fi
+          echo "value=${value}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.has_changes == 'true' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: detect build metadata
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          game_version=""
+          mod_version=""
+          java_version=""
+          loader="forge"
+
+          if [[ -f gradle.properties ]]; then
+            game_version="$(sed -nE 's/^minecraft_version=(.+)$/\1/p' gradle.properties | head -n1)"
+            mod_version="$(sed -nE 's/^mod_version=(.+)$/\1/p' gradle.properties | head -n1)"
+          fi
+
+          if [[ -f src/main/resources/fabric.mod.json ]]; then
+            loader="fabric"
+            java_version="$(sed -nE 's/.*"java"[[:space:]]*:[[:space:]]*">=([0-9]+)".*/\1/p' src/main/resources/fabric.mod.json | head -n1)"
+          fi
+
+          if [[ -z "${mod_version}" && -f build.gradle ]]; then
+            mod_version="$(sed -nE "s/^version[[:space:]]*=[[:space:]]*['\"]([^'\"]+)['\"].*/\1/p" build.gradle | head -n1)"
+          fi
+
+          if [[ -z "${game_version}" && -f build.gradle ]]; then
+            game_version="$(sed -nE "s/.*archivesBaseName[[:space:]]*=[[:space:]]*['\"][^'\"]*-([0-9]+(\.[0-9]+){1,2})['\"].*/\1/p" build.gradle | head -n1)"
+          fi
+
+          if [[ -z "${game_version}" && -f build.gradle ]]; then
+            game_version="$(sed -nE "s/.*minecraft[^'\"]*['\"]([0-9]+(\.[0-9]+){1,2})-.*/\1/p" build.gradle | head -n1)"
+          fi
+
+          if [[ -z "${java_version}" && -f build.gradle ]]; then
+            java_version="$(sed -nE 's/.*options\.release[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' build.gradle | tail -n1)"
+          fi
+
+          if [[ -z "${java_version}" && -f build.gradle ]]; then
+            raw_java="$(sed -nE 's/.*JavaVersion\.VERSION_([0-9_]+).*/\1/p' build.gradle | head -n1)"
+            if [[ -n "${raw_java}" ]]; then
+              if [[ "${raw_java}" == "1_8" ]]; then
+                java_version="8"
+              else
+                java_version="${raw_java//_/\.}"
+              fi
+            fi
+          fi
+
+          if [[ -z "${java_version}" && -f build.gradle ]]; then
+            raw_java="$(sed -nE "s/.*sourceCompatibility.*['\"]([0-9]+(\.[0-9]+)?)['\"].*/\1/p" build.gradle | head -n1)"
+            if [[ -n "${raw_java}" ]]; then
+              java_version="${raw_java#1.}"
+            fi
+          fi
+
+          if [[ -z "${game_version}" || -z "${mod_version}" || -z "${java_version}" ]]; then
+            echo "Could not detect build metadata for ${GITHUB_REF_NAME}." >&2
+            echo "game_version=${game_version}" >&2
+            echo "mod_version=${mod_version}" >&2
+            echo "java_version=${java_version}" >&2
+            exit 1
+          fi
+
+          safe_branch="${{ matrix.branch }}"
+          safe_branch="${safe_branch//\//-}"
+
+          echo "game_version=${game_version}" >> "${GITHUB_OUTPUT}"
+          echo "mod_version=${mod_version}" >> "${GITHUB_OUTPUT}"
+          echo "java_version=${java_version}" >> "${GITHUB_OUTPUT}"
+          echo "loader=${loader}" >> "${GITHUB_OUTPUT}"
+          echo "safe_branch=${safe_branch}" >> "${GITHUB_OUTPUT}"
+
+      - name: setup jdk
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ steps.metadata.outputs.java_version }}
+          distribution: temurin
+
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: build
+        run: ./gradlew build
+
+      - name: stage release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          shopt -s nullglob
+          primary_jar=""
+          for file in build/libs/*.jar; do
+            target="dist/${{ steps.metadata.outputs.safe_branch }}-$(basename "${file}")"
+            cp "${file}" "${target}"
+            base_name="$(basename "${file}")"
+            if [[ "${base_name}" != *-sources.jar && "${base_name}" != *-dev.jar && "${base_name}" != *-javadoc.jar && -z "${primary_jar}" ]]; then
+              primary_jar="${target}"
+            fi
+          done
+          shopt -u nullglob
+
+          if [[ -z "${primary_jar}" ]]; then
+            echo "No primary jar found in build/libs." >&2
+            exit 1
+          fi
+
+          cat <<EOF > "dist/${{ steps.metadata.outputs.safe_branch }}-metadata.json"
+          {
+            "branch": "${{ matrix.branch }}",
+            "commit_sha": "${{ github.sha }}",
+            "game_version": "${{ steps.metadata.outputs.game_version }}",
+            "mod_version": "${{ steps.metadata.outputs.mod_version }}",
+            "java_version": "${{ steps.metadata.outputs.java_version }}",
+            "loader": "${{ steps.metadata.outputs.loader }}",
+            "primary_jar": "$(basename "${primary_jar}")"
+          }
+          EOF
+
+      - name: upload branch artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.metadata.outputs.safe_branch }}
+          path: dist/
+
+  publish:
+    needs: [prepare, build]
+    if: ${{ needs.prepare.outputs.has_changes == 'true' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: download built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: release-*
+          merge-multiple: true
+
+      - name: build release manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          metadata_paths = sorted(Path("release-assets").glob("*-metadata.json"))
+          if not metadata_paths:
+              raise SystemExit("No metadata files were produced for manifest generation.")
+
+          manifest = {
+              "branch_heads": {},
+              "versions": []
+          }
+          for path in metadata_paths:
+              with path.open("r", encoding="utf-8") as handle:
+                  data = json.load(handle)
+              manifest["branch_heads"][data["branch"]] = data["commit_sha"]
+              manifest["versions"].append({
+                  "branch": data["branch"],
+                  "commit_sha": data["commit_sha"],
+                  "game_version": data["game_version"],
+                  "mod_version": data["mod_version"],
+                  "loader": data["loader"],
+                  "primary_jar": data["primary_jar"],
+              })
+
+          with Path("release-assets/release-manifest.json").open("w", encoding="utf-8") as handle:
+              json.dump(manifest, handle, indent=2, sort_keys=True)
+          PY
+
+      - name: create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes_file="$(mktemp)"
+          printf '%s\n' "${{ inputs.release_notes }}" > "${notes_file}"
+
+          shopt -s nullglob
+          jars=(release-assets/*.jar)
+          shopt -u nullglob
+          manifest="release-assets/release-manifest.json"
+
+          if [[ ${#jars[@]} -eq 0 ]]; then
+            echo "No jar assets were produced." >&2
+            exit 1
+          fi
+
+          gh release create "${{ inputs.release_tag }}" "${jars[@]}" "${manifest}" \
+            --title "${{ needs.prepare.outputs.release_name }}" \
+            --notes-file "${notes_file}"
+
+      - name: upload primary jars to Modrinth
+        if: ${{ inputs.publish_to_modrinth }}
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          MODRINTH_PROJECT_ID: ${{ secrets.MODRINTH_PROJECT_ID }}
+          RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${MODRINTH_TOKEN}" || -z "${MODRINTH_PROJECT_ID}" ]]; then
+            echo "MODRINTH_TOKEN and MODRINTH_PROJECT_ID must both be configured." >&2
+            exit 1
+          fi
+
+          shopt -s nullglob
+          metadata_files=(release-assets/*-metadata.json)
+          shopt -u nullglob
+
+          if [[ ${#metadata_files[@]} -eq 0 ]]; then
+            echo "No metadata files were produced for Modrinth upload." >&2
+            exit 1
+          fi
+
+          for metadata in "${metadata_files[@]}"; do
+            payload_path="${metadata%.json}.payload.json"
+            jar_path="$(METADATA_PATH="${metadata}" PAYLOAD_PATH="${payload_path}" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata_path = Path(os.environ["METADATA_PATH"])
+          with metadata_path.open("r", encoding="utf-8") as handle:
+              data = json.load(handle)
+
+          payload = {
+              "project_id": os.environ["MODRINTH_PROJECT_ID"],
+              "name": f'{os.environ["RELEASE_NAME"]} for Minecraft {data["game_version"]}',
+              "version_number": f'{data["mod_version"]}+mc{data["game_version"]}',
+              "changelog": os.environ["RELEASE_NOTES"],
+              "version_type": "release",
+              "featured": False,
+              "game_versions": [data["game_version"]],
+              "loaders": [data["loader"]],
+              "file_parts": ["file"],
+          }
+
+          with Path(os.environ["PAYLOAD_PATH"]).open("w", encoding="utf-8") as handle:
+              json.dump(payload, handle)
+
+          print(metadata_path.with_name(data["primary_jar"]))
+          PY
+            )"
+
+            curl --fail-with-body --silent --show-error \
+              -X POST "https://api.modrinth.com/v2/version" \
+              -H "Authorization: ${MODRINTH_TOKEN}" \
+              -F "data=@${payload_path};type=application/json" \
+              -F "file=@${jar_path}"
+          done
+
+  no-changes:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.has_changes != 'true' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: report no changed branches
+        run: echo "No listed branches changed since the previous release manifest."

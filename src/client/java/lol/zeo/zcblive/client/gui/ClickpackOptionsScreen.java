@@ -240,7 +240,7 @@ public final class ClickpackOptionsScreen extends OptionsSubScreen {
 
 	private void openTab(LaneTab tab) {
 		if (minecraft != null && tab != selectedTab) {
-			minecraft.setScreen(new ClickpackOptionsScreen(lastScreen, tab));
+			minecraft.setScreenAndShow(new ClickpackOptionsScreen(lastScreen, tab));
 		}
 	}
 
@@ -318,7 +318,7 @@ public final class ClickpackOptionsScreen extends OptionsSubScreen {
 		try {
 			ZCBLiveClient.controller().resetLaneSettingsToDefaults(selectedTab == LaneTab.KEYBOARD);
 			if (minecraft != null) {
-				minecraft.setScreen(new ClickpackOptionsScreen(lastScreen, selectedTab));
+				minecraft.setScreenAndShow(new ClickpackOptionsScreen(lastScreen, selectedTab));
 			}
 		} catch (IOException exception) {
 			ZCBLive.LOGGER.warn("Failed to reset clickpack options", exception);

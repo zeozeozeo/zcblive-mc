@@ -108,7 +108,7 @@ public final class ClickpackBrowserScreen extends Screen {
 
 	@Override
 	public void onClose() {
-		minecraft.setScreen(parent);
+		minecraft.setScreenAndShow(parent);
 	}
 
 	@Override
@@ -257,14 +257,14 @@ public final class ClickpackBrowserScreen extends Screen {
 			return;
 		}
 		MutableComponent message = Component.literal("Delete " + selectedEntry.name() + " from disk?");
-		minecraft.setScreen(new ConfirmScreen(confirmed -> {
+		minecraft.setScreenAndShow(new ConfirmScreen(confirmed -> {
 			if (confirmed) {
 				if (minecraft != null) {
-					minecraft.setScreen(this);
+					minecraft.setScreenAndShow(this);
 				}
 				performDeleteSelected();
 			} else if (minecraft != null) {
-				minecraft.setScreen(this);
+				minecraft.setScreenAndShow(this);
 			}
 		}, DELETE_CONFIRM_TITLE, message, DELETE_CONFIRM_YES, DELETE_CONFIRM_NO));
 	}
@@ -326,7 +326,7 @@ public final class ClickpackBrowserScreen extends Screen {
 
 	private void openOptions() {
 		if (minecraft != null) {
-			minecraft.setScreen(new ClickpackOptionsScreen(this));
+			minecraft.setScreenAndShow(new ClickpackOptionsScreen(this));
 		}
 	}
 
