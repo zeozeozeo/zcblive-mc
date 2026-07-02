@@ -7,6 +7,7 @@ public record ClickpackDbEntry(
 	long size,
 	long uncompressedSize,
 	long downloadCount,
+	@Nullable String hiatus,
 	boolean hasNoise,
 	String url,
 	String checksum,
