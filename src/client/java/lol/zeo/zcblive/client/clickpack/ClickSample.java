@@ -15,12 +15,15 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 import net.minecraft.client.sounds.JOrbisAudioStream;
 import org.lwjgl.BufferUtils;
 
+import lol.zeo.zcblive.client.audio.ClickAudioService;
+
 public final class ClickSample {
 	private final Path path;
 	private final byte[] pcmData;
 	private final AudioFormat format;
 	private SoundBuffer buffer;
 	private int bufferGainPercent = Integer.MIN_VALUE;
+	private int audioContextGeneration = Integer.MIN_VALUE;
 
 	private ClickSample(Path path, byte[] pcmData, AudioFormat format) {
 		this.path = path;
@@ -63,6 +66,12 @@ public final class ClickSample {
 
 	public synchronized SoundBuffer buffer(double preampGain) {
 		int gainPercent = clamp((int) Math.round(preampGain * 100.0D), 0, 500);
+		int currentGeneration = ClickAudioService.audioContextGeneration();
+		if (buffer != null && audioContextGeneration != currentGeneration) {
+			buffer.discardAlBuffer();
+			buffer = null;
+			bufferGainPercent = Integer.MIN_VALUE;
+		}
 		if (buffer != null && bufferGainPercent == gainPercent) {
 			return buffer;
 		}
@@ -71,6 +80,7 @@ public final class ClickSample {
 		}
 		buffer = new SoundBuffer(toByteBuffer(applyGain(gainPercent / 100.0D)), format);
 		bufferGainPercent = gainPercent;
+		audioContextGeneration = currentGeneration;
 		return buffer;
 	}
 
@@ -79,6 +89,7 @@ public final class ClickSample {
 			buffer.discardAlBuffer();
 			buffer = null;
 			bufferGainPercent = Integer.MIN_VALUE;
+			audioContextGeneration = Integer.MIN_VALUE;
 		}
 	}
 
